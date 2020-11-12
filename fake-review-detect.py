@@ -11,33 +11,53 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import GaussianNB
 import csv
 import pickle
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
 from sklearn import svm
 
-def get_content(filename):
-
+def get_passages_from_unlabeled_txt(filename):
     with open(filename) as f:
-        content = f.readlines()
-    content = [x.strip() for x in content]
-    return content
+        list_of_passages = f.readlines()
+    list_of_passages = [passage.strip() for passage in list_of_passages] # strip to remove newline chars
+    return list_of_passages
+
+def get_passages_from_labeled_txt(filename, labeled=False):
+    list_of_truthful_passages = []
+    list_of_deceptive_passages = []
+    with open(filename) as f:
+        lines = f.readlines()
+        if labeled:
+            for line_idx in range(len(lines)):
+                if lines[line_idx+1] == "0\n":
+                    list_of_truthful_passages.append(line)
+                elif lines[line_idx+1] == "1\n":
+                    list_of_deceptive_passages.append(line)
+                else:
+                    raise NameError("Invalid Label!")
+    list_of_truthful_passages = [passage.strip() for passage in list_of_truthful_passages] # strip to remove newline chars
+    list_of_deceptive_passages = [passage.strip() for passage in list_of_deceptive_passages]
+    return list_of_truthful_passages, list_of_deceptive_passages
 
 
-def get_list_of_reviews(content):
-    review_list = []
-    for line in content:
-        line_list = line.split(" ")
-        review_list.append(line_list)
-    return review_list
+def convert_passages_to_word_lists(passage_list):
+    list_of_word_lists = []
+    for passage in passage_list:
+        word_list = passage.split(" ")
+        list_of_word_lists.append(word_list)
+    return list_of_word_lists
 
-def tranfsform_test_data(unigram_count_dict, test_reviews):
-
-    for review in test_reviews:
-        for i in range(len(review)):
-            if(unigram_count_dict.get(review[i]) == None):
-                review[i] = "<unk>"          
-    return test_reviews
+def insert_unks(passage_list, unigram_count_dict):
+    """
+    Iterates though all of the words in all of the passages and checks if the word
+    is present in unigram_count_dict. If the word is not present, <unk>
+    gets placed into its position in the passage.
+    :passage_list: list of strings where each string is a passage
+    :unigram_count_dict:
+    :returns passage_list: the list of input passages with its words not present in unigram_count_dict replaced with unk.
+    """
+    for passage in passage_list:
+        for word_idx in range(len(passage)):
+            if(unigram_count_dict.get(passage[word_idx]) == None):
+                passage[word_idx] = "<unk>"          
+    return passage_list
 
 
 def get_unigram_counts(list_of_reviews):
@@ -174,58 +194,56 @@ def get_features_all_reviews(review_list, unigram_prob_dict_tru, unigram_prob_di
 
 
 if __name__ == "__main__":
-    filename1 = 'DATASET/train/deceptive.txt'
-    filename2 = 'DATASET/train/truthful.txt'
-    filename3 = 'DATASET/validation/deceptive.txt'
-    filename4 = 'DATASET/validation/truthful.txt'
-    filename5 = 'DATASET/test/test.txt'
+    # Load Data
+    train_txt_path = 'DATASET/train/train_labeled.txt'
+    validation_txt_path = 'DATASET/validation/validation_labeled.txt'
 
-    content1 = get_content(filename1) #training deceptive
-    content2 = get_content(filename2) #training truthful
-    content3 = get_content(filename3) #validation deceptive
-    content4 = get_content(filename4) #validation truthful
-    content5 = get_content(filename5) #test
+    truthful_train_passages, deceptive_train_passages = get_passages_from_labeled_txt(train_txt_path)
+    truthful_validation_passages, deceptive_validation_passages = get_passages_from_labeled_txt(validation_txt_path)
 
-    deceptive_reviews = get_list_of_reviews(content1) #a list ot deceptive reviews
-    truthful_reviews = get_list_of_reviews(content2) #a list ot truthful reviews
-    test_reviews = get_list_of_reviews(content5) #the list of test reviews
+    # Data Preprocessing
+    truthful_train_word_lists = convert_passages_to_word_lists(truthful_train_passages)
+    deceptive_train_word_lists = convert_passages_to_word_lists(deceptive_train_passages)
+    truthful_validation_word_lists = convert_passages_to_word_lists(truthful_validation_passages)
+    deceptive_validation_word_lists = convert_passages_to_word_lists(deceptive_validation_passages)
 
-    dec_valid_reviews = get_list_of_reviews(content3)
-    tru_valid_reviews = get_list_of_reviews(content4)
+    # Language Model Building
+    unigram_count_dict_truthful = get_unigram_counts(truthful_train_word_lists)
+    unigram_count_dict_deceptive = get_unigram_counts(deceptive_train_word_lists)
 
-    unigram_count_dict_truthful = get_unigram_counts(truthful_reviews)
-    unigram_count_dict_deceptive = get_unigram_counts(deceptive_reviews)
+    bigram_count_dict_truthful = get_bigram_counts(truthful_train_word_lists)
+    bigram_count_dict_deceptive = get_bigram_counts(deceptive_train_word_lists)
 
-    #transformed_test_reviews_truthful = tranfsform_test_data(unigram_count_dict_truthful, test_reviews)
-    #transformed_test_reviews_deceptive = tranfsform_test_data(unigram_count_dict_deceptive, test_reviews)
+    unigram_prob_dict_truthful = get_unigram_probs(unigram_count_dict_truthful, truthful_train_word_lists)
+    unigram_prob_dict_deceptive = get_unigram_probs(unigram_count_dict_deceptive, deceptive_train_word_lists)
 
-    transformed_valid_tru_reviews_truthful = tranfsform_test_data(unigram_count_dict_truthful, dec_valid_reviews)
-    transformed_valid_tru_reviews_deceptive = tranfsform_test_data(unigram_count_dict_deceptive, dec_valid_reviews)
+    bigram_prob_dict_truthful = get_bigram_probs(bigram_count_dict_truthful, unigram_count_dict_truthful, truthful_train_word_lists)
+    bigram_prob_dict_deceptive = get_bigram_probs(bigram_count_dict_deceptive, unigram_count_dict_deceptive, deceptive_train_word_lists)
 
-    bigram_count_dict_truthful = get_bigram_counts(truthful_reviews)
-    bigram_count_dict_deceptive = get_bigram_counts(deceptive_reviews)
+    # Last bit of data pre-processing
+    transformed_valid_reviews_truthful = insert_unks(truthful_validation_word_lists, unigram_count_dict_truthful)
+    transformed_valid_reviews_deceptive = insert_unks(deceptive_validation_word_lists, unigram_count_dict_deceptive)
 
-    unigram_prob_dict_truthful = get_unigram_probs(unigram_count_dict_truthful, truthful_reviews)
-    unigram_prob_dict_deceptive = get_unigram_probs(unigram_count_dict_deceptive, deceptive_reviews)
+    # Predict
+    perplex_unigram_truthful_tprobs = compute_perplex_unigram(transformed_valid_reviews_truthful, unigram_prob_dict_truthful)
+    perplex_unigram_truthful_dprobs = compute_perplex_unigram(transformed_valid_reviews_truthful, unigram_prob_dict_deceptive)
+    perplex_unigram_deceptive_tprobs = compute_perplex_unigram(transformed_valid_reviews_deceptive, unigram_prob_dict_truthful)
+    perplex_unigram_deceptive_dprobs = compute_perplex_unigram(transformed_valid_reviews_deceptive, unigram_prob_dict_deceptive)
 
-    bigram_prob_dict_truthful = get_bigram_probs(bigram_count_dict_truthful, unigram_count_dict_truthful ,truthful_reviews)
-    bigram_prob_dict_deceptive = get_bigram_probs(bigram_count_dict_deceptive, unigram_count_dict_deceptive, deceptive_reviews)
+    perplex_bigram_truthful_tprobs = compute_perplex_bigram(transformed_valid_reviews_truthful, unigram_prob_dict_truthful, bigram_prob_dict_truthful)
+    perplex_bigram_truthful_dprobs = compute_perplex_bigram(transformed_valid_reviews_truthful, unigram_prob_dict_deceptive, bigram_prob_dict_deceptive)
+    perplex_bigram_deceptive_tprobs = compute_perplex_bigram(transformed_valid_reviews_deceptive, unigram_prob_dict_truthful, unigram_prob_dict_truthful)
+    perplex_bigram_deceptive_dprobs = compute_perplex_bigram(transformed_valid_reviews_deceptive, unigram_prob_dict_deceptive, bigram_prob_dict_deceptive)
 
-    compute_perplex_unigram_truthful = compute_perplex_unigram(transformed_valid_tru_reviews_truthful, unigram_prob_dict_truthful)
-    compute_perplex_unigram_deceptive = compute_perplex_unigram(transformed_valid_tru_reviews_deceptive, unigram_prob_dict_deceptive)
+    unigram_predictions = make_predictions(perplex_unigram_deceptive, perplex_unigram_truthful)
+    bigram_predictions = make_predictions(perplex_bigram_deceptive, perplex_bigram_truthful)
+    # print(f"Unigram Predictions: {unigram_predictions}")
+    # print(f"Bigram Predictions: {bigram_predictions}")
 
-    compute_perplex_bigram_truthful = compute_perplex_bigram(transformed_valid_tru_reviews_truthful, unigram_prob_dict_truthful, bigram_prob_dict_truthful)
-    compute_perplex_bigram_deceptive = compute_perplex_bigram(transformed_valid_tru_reviews_deceptive, unigram_prob_dict_deceptive, bigram_prob_dict_deceptive)
-
-    unigram_predictions = make_predictions(compute_perplex_unigram_deceptive, compute_perplex_unigram_truthful)
-    bigram_predictions = make_predictions(compute_perplex_bigram_deceptive, compute_perplex_bigram_truthful)
-    print(f"Unigram Predictions: {unigram_predictions}")
-    print(f"Bigram Predictions: {bigram_predictions}")
-
-    dec_train_feats = (get_features_all_reviews(deceptive_reviews, unigram_prob_dict_truthful, unigram_prob_dict_deceptive))
-    tru_train_feats = (get_features_all_reviews(truthful_reviews, unigram_prob_dict_truthful, unigram_prob_dict_deceptive))
-    label_tru_np = np.zeros(len(truthful_reviews))
-    label_dec_np = np.ones(len(deceptive_reviews))
+    dec_train_feats = (get_features_all_reviews(deceptive_train_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive))
+    tru_train_feats = (get_features_all_reviews(truthful_train_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive))
+    label_tru_np = np.zeros(len(truthful_train_word_lists))
+    label_dec_np = np.ones(len(deceptive_train_word_lists))
     all_feats_train = np.vstack((dec_train_feats, tru_train_feats))
     all_labels_train = np.concatenate((label_dec_np, label_tru_np))
 
