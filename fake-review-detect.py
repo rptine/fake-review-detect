@@ -19,19 +19,18 @@ def get_passages_from_unlabeled_txt(filename):
     list_of_passages = [passage.strip() for passage in list_of_passages] # strip to remove newline chars
     return list_of_passages
 
-def get_passages_from_labeled_txt(filename, labeled=False):
+def get_passages_from_labeled_txt(filename):
     list_of_truthful_passages = []
     list_of_deceptive_passages = []
     with open(filename) as f:
         lines = f.readlines()
-        if labeled:
-            for line_idx in range(len(lines)):
-                if lines[line_idx+1] == "0\n":
-                    list_of_truthful_passages.append(line)
-                elif lines[line_idx+1] == "1\n":
-                    list_of_deceptive_passages.append(line)
-                else:
-                    raise NameError("Invalid Label!")
+        for line_idx in range(len(lines)-1):
+            if lines[line_idx+1] == "0\n":
+                list_of_truthful_passages.append(lines[line_idx])
+            elif lines[line_idx+1] == "1\n":
+                list_of_deceptive_passages.append(lines[line_idx])
+            else:
+                pass # line_idx is at a label, not a passage
     list_of_truthful_passages = [passage.strip() for passage in list_of_truthful_passages] # strip to remove newline chars
     list_of_deceptive_passages = [passage.strip() for passage in list_of_deceptive_passages]
     return list_of_truthful_passages, list_of_deceptive_passages
@@ -84,7 +83,6 @@ def get_bigram_counts(list_of_reviews):
             else: #case where this is the first occurence of both words
                 bigram_count_dict["<unk>" + " " + "<unk>"] += 1 #add 1 to unkown count
                 words_seen_once[sentence[i]] = 0 #add word to words seen once dictionary
-
     return bigram_count_dict
 
 def get_unigram_probs(unigram_count_dict, review_list):
@@ -98,13 +96,12 @@ def get_unigram_probs(unigram_count_dict, review_list):
 
 
 def get_bigram_probs(bigram_count_dict, unigram_count_dict, review_list):
-    all_keys_bi = [key for key, value in bigram_count_dict.items()]
     tokens = 0
     for line in review_list:
         for word in line:
             tokens += 1
     bigram_prob_dict = defaultdict(int)
-    for bigram_key in all_keys_bi: #gives probability for BIGRAMS
+    for bigram_key in bigram_count_dict.keys():
         bigram_key_count = bigram_count_dict.get(bigram_key)
         first_word = bigram_key.split(" ")[0]
         first_word_count = unigram_count_dict.get(first_word)
@@ -114,7 +111,6 @@ def get_bigram_probs(bigram_count_dict, unigram_count_dict, review_list):
         den2 = float(first_word_count) + len(unigram_count_dict.keys())
         cond_prob = numer2 / den2   
         bigram_prob_dict[bigram_key] = cond_prob
-        
     return bigram_prob_dict
 
 def compute_perplex_unigram(review_list, unigram_prob_dict):
@@ -170,6 +166,19 @@ def make_predictions(complexity_deceptive_list, complexity_truthful_list):
         else:
             preds.append(0)
     return preds
+
+def eval_preditions(prediction_list, list_actuals):
+    if list_actuals=="truthful":
+        true_val = 0
+    elif list_actuals=="deceptive":
+        true_val = 1
+        print(prediction_list)
+    correct_count = 0
+    for prediction in prediction_list:
+        if prediction == true_val:
+            correct_count+=1
+    accuracy = correct_count/len(prediction_list)
+    return accuracy
 
 
 def get_features_all_reviews(review_list, unigram_prob_dict_tru, unigram_prob_dict_dec):
@@ -229,16 +238,24 @@ if __name__ == "__main__":
     perplex_unigram_truthful_dprobs = compute_perplex_unigram(transformed_valid_reviews_truthful, unigram_prob_dict_deceptive)
     perplex_unigram_deceptive_tprobs = compute_perplex_unigram(transformed_valid_reviews_deceptive, unigram_prob_dict_truthful)
     perplex_unigram_deceptive_dprobs = compute_perplex_unigram(transformed_valid_reviews_deceptive, unigram_prob_dict_deceptive)
-
     perplex_bigram_truthful_tprobs = compute_perplex_bigram(transformed_valid_reviews_truthful, unigram_prob_dict_truthful, bigram_prob_dict_truthful)
     perplex_bigram_truthful_dprobs = compute_perplex_bigram(transformed_valid_reviews_truthful, unigram_prob_dict_deceptive, bigram_prob_dict_deceptive)
-    perplex_bigram_deceptive_tprobs = compute_perplex_bigram(transformed_valid_reviews_deceptive, unigram_prob_dict_truthful, unigram_prob_dict_truthful)
+    perplex_bigram_deceptive_tprobs = compute_perplex_bigram(transformed_valid_reviews_deceptive, unigram_prob_dict_truthful, bigram_prob_dict_truthful)
     perplex_bigram_deceptive_dprobs = compute_perplex_bigram(transformed_valid_reviews_deceptive, unigram_prob_dict_deceptive, bigram_prob_dict_deceptive)
 
-    unigram_predictions = make_predictions(perplex_unigram_deceptive, perplex_unigram_truthful)
-    bigram_predictions = make_predictions(perplex_bigram_deceptive, perplex_bigram_truthful)
-    # print(f"Unigram Predictions: {unigram_predictions}")
-    # print(f"Bigram Predictions: {bigram_predictions}")
+    unigram_predictions_truthful = make_predictions(perplex_unigram_truthful_dprobs, perplex_unigram_truthful_tprobs)
+    unigram_predictions_deceptive = make_predictions(perplex_unigram_deceptive_dprobs, perplex_unigram_deceptive_tprobs)
+    bigram_predictions_truthful = make_predictions(perplex_unigram_truthful_dprobs, perplex_unigram_truthful_tprobs)
+    bigram_predictions_deceptive = make_predictions(perplex_unigram_deceptive_dprobs, perplex_unigram_deceptive_tprobs)
+
+    unigram_accuracy_truthful = eval_preditions(unigram_predictions_truthful, "truthful")
+    unigram_accuracy_deceptive = eval_preditions(unigram_predictions_deceptive, "deceptive")
+    bigram_accuracy_truthful = eval_preditions(bigram_predictions_truthful, "truthful")
+    bigram_accuracy_deceptive = eval_preditions(bigram_predictions_deceptive, "deceptive")
+    print(f"Unigram accuracy truthful: {unigram_accuracy_truthful}")
+    print(f"Unigram accuracy deceptive: {unigram_accuracy_deceptive}")
+    print(f"Bigram accuracy truthful: {bigram_accuracy_truthful}")
+    print(f"Bigram accuracy deceptive: {bigram_accuracy_deceptive}")
 
     dec_train_feats = (get_features_all_reviews(deceptive_train_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive))
     tru_train_feats = (get_features_all_reviews(truthful_train_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive))
