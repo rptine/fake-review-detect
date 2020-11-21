@@ -36,9 +36,31 @@ def get_passages_from_labeled_txt(filename):
     return list_of_truthful_passages, list_of_deceptive_passages
 
 
+def get_passages_from_labeled_txt_modified(filename):
+    list_of_passages = []
+    with open(filename) as f:
+        lines = f.readlines()
+        for line_idx in range(len(lines)-1):
+            if lines[line_idx+1] == "0\n":
+                list_of_passages.append((lines[line_idx], 0))
+            elif lines[line_idx+1] == "1\n":
+                list_of_passages.append((lines[line_idx], 1))
+            else:
+                pass # line_idx is at a label, not a passage
+    list_of_passages = [passage.strip() for passage, _ in list_of_passages] # strip to remove newline chars
+    return dict_of_labeled_passages
+
+
 def convert_passages_to_word_lists(passage_list):
     list_of_word_lists = []
     for passage in passage_list:
+        word_list = passage.split(" ")
+        list_of_word_lists.append(word_list)
+    return list_of_word_lists
+
+def convert_passages_to_word_lists_modified(passage_list):
+    list_of_word_lists = []
+    for passage, _ in passage_list:
         word_list = passage.split(" ")
         list_of_word_lists.append(word_list)
     return list_of_word_lists
@@ -55,6 +77,25 @@ def insert_unks(passage_list, unigram_count_dict):
     for passage in passage_list:
         for word_idx in range(len(passage)):
             if(unigram_count_dict.get(passage[word_idx]) == None):
+                passage[word_idx] = "<unk>"          
+    return passage_list
+
+def insert_unks_modified(passage_list, unigram_count_dict_truthful, unigram_count_dict_deceptive):
+    """
+    Iterates though all of the words in all of the passages and checks if the word
+    is present in unigram_count_dict. If the word is not present, <unk>
+    gets placed into its position in the passage.
+    :passage_list: list of strings where each string is a passage
+    :unigram_count_dict:
+    :returns passage_list: the list of input passages with its words not present in unigram_count_dict replaced with unk.
+    """
+    for passage, label in passage_list:
+        if label == 0:
+            count_dict = unigram_count_dict_truthful
+        else:
+            count_dict = unigram_count_dict_deceptive
+        for word_idx in range(len(passage)):
+            if(count_dict.get(passage[word_idx]) == None):
                 passage[word_idx] = "<unk>"          
     return passage_list
 
@@ -207,16 +248,22 @@ if __name__ == "__main__":
     train_txt_path = 'DATASET/train/train_labeled.txt'
     validation_txt_path = 'DATASET/validation/validation_labeled.txt'
 
-    truthful_train_passages, deceptive_train_passages = get_passages_from_labeled_txt(train_txt_path)
-    truthful_validation_passages, deceptive_validation_passages = get_passages_from_labeled_txt(validation_txt_path)
+    labeled_train_passages = get_passages_from_labeled_txt_modified(train_txt_path)
+    labeled_validation_passages = get_passages_from_labeled_txt_modified(validation_txt_path)
 
     # Data Preprocessing
-    truthful_train_word_lists = convert_passages_to_word_lists(truthful_train_passages)
-    deceptive_train_word_lists = convert_passages_to_word_lists(deceptive_train_passages)
-    truthful_validation_word_lists = convert_passages_to_word_lists(truthful_validation_passages)
-    deceptive_validation_word_lists = convert_passages_to_word_lists(deceptive_validation_passages)
+    train_word_lists = convert_passages_to_word_lists_modified(labeled_train_passages)
+    validation_word_lists = convert_passages_to_word_lists_modified(labeled_validation_passages)
 
     # Language Model Building
+    # split training word lists into truthful and deceptive sets
+    truthful_train_word_lists = []
+    deceptive_train_word_lists = []
+    for passage, label in train_word_lists:
+        if label == 0:
+            truthful_train_word_lists.append(passage)
+        else:
+            deceptive_train_word_lists.append(passage)
     unigram_count_dict_truthful = get_unigram_counts(truthful_train_word_lists)
     unigram_count_dict_deceptive = get_unigram_counts(deceptive_train_word_lists)
 
@@ -230,8 +277,9 @@ if __name__ == "__main__":
     bigram_prob_dict_deceptive = get_bigram_probs(bigram_count_dict_deceptive, unigram_count_dict_deceptive, deceptive_train_word_lists)
 
     # Last bit of data pre-processing
-    transformed_valid_reviews_truthful = insert_unks(truthful_validation_word_lists, unigram_count_dict_truthful)
-    transformed_valid_reviews_deceptive = insert_unks(deceptive_validation_word_lists, unigram_count_dict_deceptive)
+    # transformed_valid_reviews_truthful = insert_unks(truthful_validation_word_lists, unigram_count_dict_truthful)
+    # transformed_valid_reviews_deceptive = insert_unks(deceptive_validation_word_lists, unigram_count_dict_deceptive)
+    transformed_validation_word_lists = insert_unks_modified(truthful_validation_word_lists, unigram_count_dict_truthful, unigram_predictions_truthful)
 
     # Predict
     perplex_unigram_truthful_tprobs = compute_perplex_unigram(transformed_valid_reviews_truthful, unigram_prob_dict_truthful)
