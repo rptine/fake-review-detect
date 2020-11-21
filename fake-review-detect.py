@@ -47,8 +47,8 @@ def get_passages_from_labeled_txt_modified(filename):
                 list_of_passages.append((lines[line_idx], 1))
             else:
                 pass # line_idx is at a label, not a passage
-    list_of_passages = [passage.strip() for passage, _ in list_of_passages] # strip to remove newline chars
-    return dict_of_labeled_passages
+    list_of_passages = [(passage.strip(), label) for passage, label in list_of_passages] # strip to remove newline chars
+    return list_of_passages
 
 
 def convert_passages_to_word_lists(passage_list):
@@ -60,9 +60,9 @@ def convert_passages_to_word_lists(passage_list):
 
 def convert_passages_to_word_lists_modified(passage_list):
     list_of_word_lists = []
-    for passage, _ in passage_list:
+    for passage, label in passage_list:
         word_list = passage.split(" ")
-        list_of_word_lists.append(word_list)
+        list_of_word_lists.append((word_list, label))
     return list_of_word_lists
 
 def insert_unks(passage_list, unigram_count_dict):
@@ -279,7 +279,7 @@ if __name__ == "__main__":
     # Last bit of data pre-processing
     # transformed_valid_reviews_truthful = insert_unks(truthful_validation_word_lists, unigram_count_dict_truthful)
     # transformed_valid_reviews_deceptive = insert_unks(deceptive_validation_word_lists, unigram_count_dict_deceptive)
-    transformed_validation_word_lists = insert_unks_modified(truthful_validation_word_lists, unigram_count_dict_truthful, unigram_predictions_truthful)
+    transformed_validation_word_lists = insert_unks_modified(validation_word_lists, unigram_prob_dict_truthful, unigram_count_dict_deceptive)
 
     # Predict
     perplex_unigram_truthful_tprobs = compute_perplex_unigram(transformed_valid_reviews_truthful, unigram_prob_dict_truthful)
