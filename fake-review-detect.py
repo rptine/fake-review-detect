@@ -182,7 +182,6 @@ def compute_perplex_bigram(review_list, unigram_prob_dict, bigram_prob_dict):
             tokens += 1
     for line in review_list:
         sum_probs = 0
-
         for i in range(len(line)-1):
             prob = 0
             bigram = str(line[i] + " " + line[i+1])
@@ -199,9 +198,10 @@ def compute_perplex_bigram(review_list, unigram_prob_dict, bigram_prob_dict):
 
 
 def make_predictions(complexity_deceptive_list, complexity_truthful_list):
-
+    "Return the class with the higher perplexity score"
     preds = []
     for i in range(len(complexity_deceptive_list)):
+        print(complexity_deceptive_list[i], complexity_truthful_list[i])
         if complexity_deceptive_list[i] < complexity_truthful_list[i]:
             preds.append(1)
         else:
@@ -213,7 +213,6 @@ def eval_preditions(prediction_list, list_actuals):
         true_val = 0
     elif list_actuals=="deceptive":
         true_val = 1
-        print(prediction_list)
     correct_count = 0
     for prediction in prediction_list:
         if prediction == true_val:
@@ -280,6 +279,13 @@ if __name__ == "__main__":
     # transformed_valid_reviews_truthful = insert_unks(truthful_validation_word_lists, unigram_count_dict_truthful)
     # transformed_valid_reviews_deceptive = insert_unks(deceptive_validation_word_lists, unigram_count_dict_deceptive)
     transformed_validation_word_lists = insert_unks_modified(validation_word_lists, unigram_prob_dict_truthful, unigram_count_dict_deceptive)
+    transformed_valid_reviews_truthful = []
+    transformed_valid_reviews_deceptive = []
+    for passage, label in transformed_validation_word_lists:
+        if label == 0:
+            transformed_valid_reviews_truthful.append(passage)
+        else:
+            transformed_valid_reviews_deceptive.append(passage)
 
     # Predict
     perplex_unigram_truthful_tprobs = compute_perplex_unigram(transformed_valid_reviews_truthful, unigram_prob_dict_truthful)
@@ -293,8 +299,8 @@ if __name__ == "__main__":
 
     unigram_predictions_truthful = make_predictions(perplex_unigram_truthful_dprobs, perplex_unigram_truthful_tprobs)
     unigram_predictions_deceptive = make_predictions(perplex_unigram_deceptive_dprobs, perplex_unigram_deceptive_tprobs)
-    bigram_predictions_truthful = make_predictions(perplex_unigram_truthful_dprobs, perplex_unigram_truthful_tprobs)
-    bigram_predictions_deceptive = make_predictions(perplex_unigram_deceptive_dprobs, perplex_unigram_deceptive_tprobs)
+    bigram_predictions_truthful = make_predictions(perplex_bigram_truthful_dprobs, perplex_bigram_truthful_tprobs)
+    bigram_predictions_deceptive = make_predictions(perplex_bigram_deceptive_dprobs, perplex_bigram_deceptive_tprobs)
 
     unigram_accuracy_truthful = eval_preditions(unigram_predictions_truthful, "truthful")
     unigram_accuracy_deceptive = eval_preditions(unigram_predictions_deceptive, "deceptive")
