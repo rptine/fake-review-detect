@@ -157,15 +157,14 @@ def get_bigram_probs(bigram_count_dict, unigram_count_dict, review_list):
 def compute_perplex_unigram(review_list, unigram_prob_dict):
     tokens = 0
     for line in review_list:
-        for word in line:
-            tokens += 1
+        tokens+=(len(line))
     perplex_scores = []
     for line in review_list:
         sum_probs = 0
         for word in line:
             prob = unigram_prob_dict.get(word)
             if prob == None:
-                prob = unigram_prob_dict.get("<unk>")
+                prob = unigram_prob_dict.get("<unk>")/2
             sum_probs -= math.log(prob)
 
         result_for_line = math.exp(sum_probs/tokens)
@@ -178,17 +177,15 @@ def compute_perplex_bigram(review_list, unigram_prob_dict, bigram_prob_dict):
     perplex_scores = []
     tokens = 0
     for line in review_list:
-        for word in line:
-            tokens += 1
+        tokens+=(len(line))
     for line in review_list:
         sum_probs = 0
         for i in range(len(line)-1):
             prob = 0
             bigram = str(line[i] + " " + line[i+1])
-            if (bigram in bigram_prob_dict.keys()):
-                prob = bigram_prob_dict.get(bigram)
-            else:
-                prob = bigram_prob_dict.get("<unk> <unk>")
+            prob = bigram_prob_dict.get(bigram)
+            if prob == None:
+                prob = bigram_prob_dict.get("<unk> <unk>")/2
             sum_probs -= math.log(prob)
    
         result_for_line = math.exp(sum_probs/tokens)
@@ -201,7 +198,6 @@ def make_predictions(complexity_deceptive_list, complexity_truthful_list):
     "Return the class with the higher perplexity score"
     preds = []
     for i in range(len(complexity_deceptive_list)):
-        print(complexity_deceptive_list[i], complexity_truthful_list[i])
         if complexity_deceptive_list[i] < complexity_truthful_list[i]:
             preds.append(1)
         else:
@@ -304,8 +300,12 @@ if __name__ == "__main__":
 
     unigram_accuracy_truthful = eval_preditions(unigram_predictions_truthful, "truthful")
     unigram_accuracy_deceptive = eval_preditions(unigram_predictions_deceptive, "deceptive")
+    unigram_accuracy = (unigram_accuracy_truthful*len(unigram_predictions_truthful)+unigram_accuracy_deceptive*len(unigram_predictions_deceptive))/(len(unigram_predictions_truthful)+len(unigram_predictions_deceptive))
     bigram_accuracy_truthful = eval_preditions(bigram_predictions_truthful, "truthful")
     bigram_accuracy_deceptive = eval_preditions(bigram_predictions_deceptive, "deceptive")
+    bigram_accuracy = (bigram_accuracy_truthful*len(bigram_predictions_truthful)+bigram_accuracy_deceptive*len(bigram_predictions_deceptive))/(len(bigram_predictions_truthful)+len(bigram_predictions_deceptive))
+    print(f"Unigram accuracy: {unigram_accuracy}")
+    print(f"Bigram accuracy: {bigram_accuracy}")
     print(f"Unigram accuracy truthful: {unigram_accuracy_truthful}")
     print(f"Unigram accuracy deceptive: {unigram_accuracy_deceptive}")
     print(f"Bigram accuracy truthful: {bigram_accuracy_truthful}")
