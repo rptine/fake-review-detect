@@ -12,6 +12,7 @@ from sklearn.naive_bayes import GaussianNB
 import csv
 import pickle
 from sklearn import svm
+import yaml
 
 
 def get_passages_from_unlabeled_txt(filename):
@@ -271,9 +272,14 @@ def calculate_average_accuracy(
 
 
 if __name__ == "__main__":
+    with open(r'config.yml') as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
+        train_path = config["train"]
+        validation_path = config["validation"]
+
     # Load Data
-    train_txt_path = "DATASET/train/train_labeled.txt"
-    validation_txt_path = "DATASET/validation/validation_labeled.txt"
+    train_txt_path = train_path
+    validation_txt_path = validation_path
 
     labeled_train_passages = get_passages_from_labeled_txt_modified(train_txt_path)
     labeled_validation_passages = get_passages_from_labeled_txt_modified(

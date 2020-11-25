@@ -1,0 +1,4 @@
+train: 
+  "DATASET/train/train_labeled.txt"
+validation: 
+  "DATASET/validation/validation_labeled.txt"
