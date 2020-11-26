@@ -4,6 +4,7 @@ import re
 import time
 import math
 import numpy as np
+import pandas as pd
 from feature_extraction import *
 from tqdm import tqdm
 from sklearn.preprocessing import normalize
@@ -301,6 +302,14 @@ if __name__ == "__main__":
             truthful_train_word_lists.append(passage)
         else:
             deceptive_train_word_lists.append(passage)
+    truthful_validation_word_lists = []
+    deceptive_validation_word_lists = []
+    for passage, label in validation_word_lists:
+        if label == 0:
+            truthful_validation_word_lists.append(passage)
+        else:
+            deceptive_validation_word_lists.append(passage)
+    
     unigram_count_dict_truthful = get_unigram_counts(truthful_train_word_lists)
     unigram_count_dict_deceptive = get_unigram_counts(deceptive_train_word_lists)
 
@@ -428,18 +437,26 @@ if __name__ == "__main__":
     all_feats_train = np.vstack((dec_train_feats, tru_train_feats))
     all_labels_train = np.concatenate((label_dec_np, label_tru_np))
 
-    test_feats = get_features_all_reviews(
-        test_reviews, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
+    valid_feats_truthful = get_features_all_reviews(
+        truthful_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
     )
-    valid_feats_dec = get_features_all_reviews(
-        dec_valid_reviews, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
-    )
-    valid_feats_tru = get_features_all_reviews(
-        tru_valid_reviews, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
+
+    valid_feats_deceptive = get_features_all_reviews(
+        deceptive_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
     )
 
     model = MultinomialNB()
     model.fit(all_feats_train, all_labels_train)
-    preds_test_NB_dec = model.predict(valid_feats_dec)
-    preds_test_NB_tru = model.predict(valid_feats_tru)
-    preds_test = model.predict(test_feats)
+    NB_predictions_truthful = model.predict(valid_feats_truthful)
+    NB_predictions_deceptive = model.predict(valid_feats_deceptive)
+    NB_accuracy_truthful = eval_preditions(NB_predictions_truthful, "truthful")
+    NB_accuracy_deceptive = eval_preditions(NB_predictions_deceptive, "deceptive")
+    NB_accuracy = calculate_average_accuracy(
+        NB_accuracy_deceptive,
+        NB_predictions_deceptive,
+        NB_accuracy_truthful,
+        NB_predictions_truthful,
+    )
+    print(f"NB Accuracy: {NB_accuracy}")
+    print(f"NB Accuracy Deceptive: {NB_accuracy_deceptive}")
+    print(f"NB Accuracy Truthful: {NB_accuracy_truthful}")
