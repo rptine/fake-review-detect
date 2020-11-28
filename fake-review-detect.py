@@ -24,29 +24,7 @@ def get_passages_from_unlabeled_txt(filename):
     ]  # strip to remove newline chars
     return list_of_passages
 
-
 def get_passages_from_labeled_txt(filename):
-    list_of_truthful_passages = []
-    list_of_deceptive_passages = []
-    with open(filename) as f:
-        lines = f.readlines()
-        for line_idx in range(len(lines) - 1):
-            if lines[line_idx + 1] == "0\n":
-                list_of_truthful_passages.append(lines[line_idx])
-            elif lines[line_idx + 1] == "1\n":
-                list_of_deceptive_passages.append(lines[line_idx])
-            else:
-                pass  # line_idx is at a label, not a passage
-    list_of_truthful_passages = [
-        passage.strip() for passage in list_of_truthful_passages
-    ]  # strip to remove newline chars
-    list_of_deceptive_passages = [
-        passage.strip() for passage in list_of_deceptive_passages
-    ]
-    return list_of_truthful_passages, list_of_deceptive_passages
-
-
-def get_passages_from_labeled_txt_modified(filename):
     list_of_passages = []
     with open(filename) as f:
         lines = f.readlines()
@@ -65,37 +43,20 @@ def get_passages_from_labeled_txt_modified(filename):
 
 def convert_passages_to_word_lists(passage_list):
     list_of_word_lists = []
-    for passage in passage_list:
-        word_list = passage.split(" ")
-        list_of_word_lists.append(word_list)
-    return list_of_word_lists
-
-
-def convert_passages_to_word_lists_modified(passage_list):
-    list_of_word_lists = []
     for passage, label in passage_list:
         word_list = passage.split(" ")
         list_of_word_lists.append((word_list, label))
     return list_of_word_lists
 
-
-def insert_unks(passage_list, unigram_count_dict):
-    """
-    Iterates though all of the words in all of the passages and checks if the word
-    is present in unigram_count_dict. If the word is not present, <unk>
-    gets placed into its position in the passage.
-    :passage_list: list of strings where each string is a passage
-    :unigram_count_dict:
-    :returns passage_list: the list of input passages with its words not present in unigram_count_dict replaced with unk.
-    """
-    for passage in passage_list:
-        for word_idx in range(len(passage)):
-            if unigram_count_dict.get(passage[word_idx]) == None:
-                passage[word_idx] = "<unk>"
-    return passage_list
+def count_num_of_tokens(review_list):
+    num_tokens = 0
+    for line in review_list:
+        num_tokens += len(line)
+    return num_tokens
 
 
-def insert_unks_modified(
+
+def insert_unks(
     passage_list, unigram_count_dict_truthful, unigram_count_dict_deceptive
 ):
     """
@@ -112,7 +73,7 @@ def insert_unks_modified(
         else:
             count_dict = unigram_count_dict_deceptive
         for word_idx in range(len(passage)):
-            if count_dict.get(passage[word_idx]) == None:
+            if count_dict.get(passage[word_idx]) is None:
                 passage[word_idx] = "<unk>"
     return passage_list
 
@@ -124,7 +85,7 @@ def get_unigram_counts(list_of_reviews):
         for word in line:
             if word in words_seen_once.keys():
                 unigram_count_dict[word] += 1
-            else:  # case where this is the first occurence in the word
+            else: # case where this is the first occurence in the word
                 unigram_count_dict["<unk>"] += 1  # add 1 to unkown count
                 words_seen_once[word] = 0  # add word to words seen once dictionary
     return unigram_count_dict
@@ -152,20 +113,14 @@ def get_bigram_counts(list_of_reviews):
 
 
 def get_unigram_probs(unigram_count_dict, review_list):
-    tokens = 0
-    for line in review_list:
-        for word in line:
-            tokens += 1
-    den = float(tokens) + len(unigram_count_dict.keys())
-    unigram_prob_dict = {k: ((v + 1) / den) for k, v in unigram_count_dict.items()}
+    num_tokens = count_num_of_tokens(review_list)
+    token_count_smoothed = num_tokens + len(unigram_count_dict.keys())
+    unigram_prob_dict = {k: ((v + 1) / token_count_smoothed) for k, v in unigram_count_dict.items()}
     return unigram_prob_dict
 
 
 def get_bigram_probs(bigram_count_dict, unigram_count_dict, review_list):
-    tokens = 0
-    for line in review_list:
-        for word in line:
-            tokens += 1
+    # Using formula: P(Bigram|FirstWord) = P(FirstWord and Bigram) / P(FirstWord)
     bigram_prob_dict = defaultdict(int)
     for bigram_key in bigram_count_dict.keys():
         bigram_key_count = bigram_count_dict.get(bigram_key)
@@ -173,27 +128,25 @@ def get_bigram_probs(bigram_count_dict, unigram_count_dict, review_list):
         first_word_count = unigram_count_dict.get(first_word)
         if first_word_count is None:
             first_word_count = unigram_count_dict.get("<unk>")
-        numer2 = float(bigram_key_count) + 1
-        den2 = float(first_word_count) + len(unigram_count_dict.keys())
-        cond_prob = numer2 / den2
+        count_bigram_smoothed = bigram_key_count + 1
+        count_first_word_smoothed = first_word_count + len(unigram_count_dict.keys())
+        cond_prob = count_bigram_smoothed / count_first_word_smoothed
         bigram_prob_dict[bigram_key] = cond_prob
     return bigram_prob_dict
 
 
 def compute_perplex_unigram(review_list, unigram_prob_dict):
-    tokens = 0
-    for line in review_list:
-        tokens += len(line)
+    num_tokens = count_num_of_tokens(review_list)
     perplex_scores = []
     for line in review_list:
         sum_probs = 0
         for word in line:
             prob = unigram_prob_dict.get(word)
-            if prob == None:
-                prob = unigram_prob_dict.get("<unk>") / 2
+            if prob is None:
+                prob = unigram_prob_dict.get("<unk>") * .000001
             sum_probs -= math.log(prob)
 
-        result_for_line = math.exp(sum_probs / tokens)
+        result_for_line = math.exp(sum_probs / num_tokens)
         perplex_scores.append(result_for_line)
 
     return perplex_scores
@@ -201,20 +154,18 @@ def compute_perplex_unigram(review_list, unigram_prob_dict):
 
 def compute_perplex_bigram(review_list, unigram_prob_dict, bigram_prob_dict):
     perplex_scores = []
-    tokens = 0
-    for line in review_list:
-        tokens += len(line)
+    num_tokens = count_num_of_tokens(review_list)
     for line in review_list:
         sum_probs = 0
         for i in range(len(line) - 1):
             prob = 0
             bigram = str(line[i] + " " + line[i + 1])
             prob = bigram_prob_dict.get(bigram)
-            if prob == None:
-                prob = bigram_prob_dict.get("<unk> <unk>") / 2
+            if prob is None:
+                prob = bigram_prob_dict.get("<unk> <unk>") * .000001
             sum_probs -= math.log(prob)
 
-        result_for_line = math.exp(sum_probs / tokens)
+        result_for_line = math.exp(sum_probs / num_tokens)
         perplex_scores.append(result_for_line)
     return perplex_scores
 
@@ -244,14 +195,12 @@ def eval_preditions(prediction_list, list_actuals):
 
 
 def get_features_all_reviews(review_list, unigram_prob_dict_tru, unigram_prob_dict_dec):
-    tokens = 0
-    for line in review_list:
-        tokens += len(line)
+    num_tokens = count_num_of_tokens(review_list)
     all_features_numpy = np.asarray([])
     for rev in tqdm(review_list):
         rev = " ".join(rev)
         feat_list = get_feature_vector(
-            rev, unigram_prob_dict_tru, unigram_prob_dict_dec, tokens
+            rev, unigram_prob_dict_tru, unigram_prob_dict_dec, num_tokens
         )
         feat_list_numpy = np.asarray(feat_list)
         if all_features_numpy.size == 0:
@@ -282,14 +231,14 @@ if __name__ == "__main__":
     train_txt_path = train_path
     validation_txt_path = validation_path
 
-    labeled_train_passages = get_passages_from_labeled_txt_modified(train_txt_path)
-    labeled_validation_passages = get_passages_from_labeled_txt_modified(
+    labeled_train_passages = get_passages_from_labeled_txt(train_txt_path)
+    labeled_validation_passages = get_passages_from_labeled_txt(
         validation_txt_path
     )
 
     # Data Preprocessing
-    train_word_lists = convert_passages_to_word_lists_modified(labeled_train_passages)
-    validation_word_lists = convert_passages_to_word_lists_modified(
+    train_word_lists = convert_passages_to_word_lists(labeled_train_passages)
+    validation_word_lists = convert_passages_to_word_lists(
         labeled_validation_passages
     )
 
@@ -335,7 +284,7 @@ if __name__ == "__main__":
     )
 
     # Last bit of data pre-processing
-    transformed_validation_word_lists = insert_unks_modified(
+    transformed_validation_word_lists = insert_unks(
         validation_word_lists, unigram_prob_dict_truthful, unigram_count_dict_deceptive
     )
     transformed_valid_reviews_truthful = []
