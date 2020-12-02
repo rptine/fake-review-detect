@@ -83,15 +83,12 @@ def get_unigram_counts(list_of_reviews):
     words_seen_once = {}
     for line in list_of_reviews:
         for word in line:
-            if word in words_seen_once.keys():
-                unigram_count_dict[word] += 1
-            else: # case where this is the first occurence in the word
-                unigram_count_dict["<unk>"] += 1  # add 1 to unkown count
-                words_seen_once[word] = 0  # add word to words seen once dictionary
+            unigram_count_dict[word] += 1
+    unigram_count_dict["<unk>"] = 1
     return unigram_count_dict
 
 
-def get_bigram_counts(list_of_reviews):
+def get_bigram_counts(list_of_reviews, unigram_count_dict):
     bigram_count_dict = defaultdict(int)
     words_seen_once = {}
     for sentence in list_of_reviews:
@@ -105,10 +102,12 @@ def get_bigram_counts(list_of_reviews):
             ):
                 bigram_count_dict[sentence[i] + " " + "<unk>"] += 1
             else:  # case where this is the first occurence of both words
-                bigram_count_dict["<unk>" + " " + "<unk>"] += 1  # add 1 to unkown count
+                if (sentence[i + 1] in words_seen_once.keys()):
+                    bigram_count_dict["<unk>" + " " + sentence[i]] += 1
                 words_seen_once[
                     sentence[i]
                 ] = 0  # add word to words seen once dictionary
+    bigram_count_dict["<unk> <unk>"] = 1  # add 1 to unkown count
     return bigram_count_dict
 
 
@@ -119,15 +118,24 @@ def get_unigram_probs(unigram_count_dict, review_list):
     return unigram_prob_dict
 
 
-def get_bigram_probs(bigram_count_dict, unigram_count_dict, review_list):
+def get_bigram_probs(bigram_count_dict,  review_list):
     # Using formula: P(Bigram|FirstWord) = P(FirstWord and Bigram) / P(FirstWord)
+    word_dict_with_unk = defaultdict(int)
+    words_seen_once = {}
+    for line in review_list:
+        for word in line:
+            if word in words_seen_once.keys():
+                word_dict_with_unk[word] += 1
+            else: # case where this is the first occurence in the word
+                word_dict_with_unk["<unk>"] += 1  # add 1 to unkown count
+                words_seen_once[word] = 0  # add word to words seen once dictionary
     bigram_prob_dict = defaultdict(int)
     for bigram_key in bigram_count_dict.keys():
         bigram_key_count = bigram_count_dict.get(bigram_key)
         first_word = bigram_key.split(" ")[0]
-        first_word_count = unigram_count_dict.get(first_word)
+        first_word_count = word_dict_with_unk.get(first_word)
         if first_word_count is None:
-            first_word_count = unigram_count_dict.get("<unk>")
+            first_word_count = word_dict_with_unk.get("<unk>")
         count_bigram_smoothed = bigram_key_count + 1
         count_first_word_smoothed = first_word_count + len(unigram_count_dict.keys())
         cond_prob = count_bigram_smoothed / count_first_word_smoothed
@@ -143,7 +151,7 @@ def compute_perplex_unigram(review_list, unigram_prob_dict):
         for word in line:
             prob = unigram_prob_dict.get(word)
             if prob is None:
-                prob = unigram_prob_dict.get("<unk>") * .000001
+                prob = unigram_prob_dict.get("<unk>")
             sum_probs -= math.log(prob)
 
         result_for_line = math.exp(sum_probs / num_tokens)
@@ -162,7 +170,7 @@ def compute_perplex_bigram(review_list, unigram_prob_dict, bigram_prob_dict):
             bigram = str(line[i] + " " + line[i + 1])
             prob = bigram_prob_dict.get(bigram)
             if prob is None:
-                prob = bigram_prob_dict.get("<unk> <unk>") * .000001
+                prob = bigram_prob_dict.get("<unk> <unk>")
             sum_probs -= math.log(prob)
 
         result_for_line = math.exp(sum_probs / num_tokens)
@@ -259,11 +267,14 @@ if __name__ == "__main__":
         else:
             deceptive_validation_word_lists.append(passage)
     
+    #UNKS start here
     unigram_count_dict_truthful = get_unigram_counts(truthful_train_word_lists)
     unigram_count_dict_deceptive = get_unigram_counts(deceptive_train_word_lists)
 
-    bigram_count_dict_truthful = get_bigram_counts(truthful_train_word_lists)
-    bigram_count_dict_deceptive = get_bigram_counts(deceptive_train_word_lists)
+    unigram_count_dict = get_unigram_counts([passage for passage, _ in train_word_lists])
+
+    bigram_count_dict_truthful = get_bigram_counts(truthful_train_word_lists, unigram_count_dict_truthful)
+    bigram_count_dict_deceptive = get_bigram_counts(deceptive_train_word_lists, unigram_count_dict_deceptive)
 
     unigram_prob_dict_truthful = get_unigram_probs(
         unigram_count_dict_truthful, truthful_train_word_lists
@@ -274,12 +285,10 @@ if __name__ == "__main__":
 
     bigram_prob_dict_truthful = get_bigram_probs(
         bigram_count_dict_truthful,
-        unigram_count_dict_truthful,
         truthful_train_word_lists,
     )
     bigram_prob_dict_deceptive = get_bigram_probs(
         bigram_count_dict_deceptive,
-        unigram_count_dict_deceptive,
         deceptive_train_word_lists,
     )
 
@@ -371,41 +380,41 @@ if __name__ == "__main__":
     print(f"Bigram accuracy truthful: {bigram_accuracy_truthful}")
     print(f"Bigram accuracy deceptive: {bigram_accuracy_deceptive}")
 
-    dec_train_feats = get_features_all_reviews(
-        deceptive_train_word_lists,
-        unigram_prob_dict_truthful,
-        unigram_prob_dict_deceptive,
-    )
-    tru_train_feats = get_features_all_reviews(
-        truthful_train_word_lists,
-        unigram_prob_dict_truthful,
-        unigram_prob_dict_deceptive,
-    )
-    label_tru_np = np.zeros(len(truthful_train_word_lists))
-    label_dec_np = np.ones(len(deceptive_train_word_lists))
-    all_feats_train = np.vstack((dec_train_feats, tru_train_feats))
-    all_labels_train = np.concatenate((label_dec_np, label_tru_np))
+    # dec_train_feats = get_features_all_reviews(
+    #     deceptive_train_word_lists,
+    #     unigram_prob_dict_truthful,
+    #     unigram_prob_dict_deceptive,
+    # )
+    # tru_train_feats = get_features_all_reviews(
+    #     truthful_train_word_lists,
+    #     unigram_prob_dict_truthful,
+    #     unigram_prob_dict_deceptive,
+    # )
+    # label_tru_np = np.zeros(len(truthful_train_word_lists))
+    # label_dec_np = np.ones(len(deceptive_train_word_lists))
+    # all_feats_train = np.vstack((dec_train_feats, tru_train_feats))
+    # all_labels_train = np.concatenate((label_dec_np, label_tru_np))
 
-    valid_feats_truthful = get_features_all_reviews(
-        truthful_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
-    )
+    # valid_feats_truthful = get_features_all_reviews(
+    #     truthful_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
+    # )
 
-    valid_feats_deceptive = get_features_all_reviews(
-        deceptive_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
-    )
+    # valid_feats_deceptive = get_features_all_reviews(
+    #     deceptive_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
+    # )
 
-    model = MultinomialNB()
-    model.fit(all_feats_train, all_labels_train)
-    NB_predictions_truthful = model.predict(valid_feats_truthful)
-    NB_predictions_deceptive = model.predict(valid_feats_deceptive)
-    NB_accuracy_truthful = eval_preditions(NB_predictions_truthful, "truthful")
-    NB_accuracy_deceptive = eval_preditions(NB_predictions_deceptive, "deceptive")
-    NB_accuracy = calculate_average_accuracy(
-        NB_accuracy_deceptive,
-        NB_predictions_deceptive,
-        NB_accuracy_truthful,
-        NB_predictions_truthful,
-    )
-    print(f"NB Accuracy: {NB_accuracy}")
-    print(f"NB Accuracy Deceptive: {NB_accuracy_deceptive}")
-    print(f"NB Accuracy Truthful: {NB_accuracy_truthful}")
+    # model = MultinomialNB()
+    # model.fit(all_feats_train, all_labels_train)
+    # NB_predictions_truthful = model.predict(valid_feats_truthful)
+    # NB_predictions_deceptive = model.predict(valid_feats_deceptive)
+    # NB_accuracy_truthful = eval_preditions(NB_predictions_truthful, "truthful")
+    # NB_accuracy_deceptive = eval_preditions(NB_predictions_deceptive, "deceptive")
+    # NB_accuracy = calculate_average_accuracy(
+    #     NB_accuracy_deceptive,
+    #     NB_predictions_deceptive,
+    #     NB_accuracy_truthful,
+    #     NB_predictions_truthful,
+    # )
+    # print(f"NB Accuracy: {NB_accuracy}")
+    # print(f"NB Accuracy Deceptive: {NB_accuracy_deceptive}")
+    # print(f"NB Accuracy Truthful: {NB_accuracy_truthful}")
