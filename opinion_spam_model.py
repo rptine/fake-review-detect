@@ -88,6 +88,9 @@ class OpinionSpamModel():
     
     @staticmethod
     def get_unigram_probs(unigram_count_dict, review_list):
+        """
+        Converts count dictionary into a probability dictionary.
+        """
         num_tokens = OpinionSpamModel.count_num_of_tokens(review_list)
         token_count_smoothed = num_tokens + len(unigram_count_dict.keys())
         unigram_prob_dict = {k: ((v + 1) / token_count_smoothed) for k, v in unigram_count_dict.items()}
@@ -131,18 +134,16 @@ class OpinionSpamModel():
                 truthful_train_word_lists.append(passage)
             else:
                 deceptive_train_word_lists.append(passage)
-            unigram_count_dict_truthful = OpinionSpamModel.get_unigram_counts(truthful_train_word_lists)
-        if self.model_type == "unigram":
-            unigram_count_dict_truthful = OpinionSpamModel.get_unigram_counts(truthful_train_word_lists)
-            unigram_count_dict_deceptive = OpinionSpamModel.get_unigram_counts(deceptive_train_word_lists)
-            unigram_prob_dict_truthful = OpinionSpamModel.get_unigram_probs(
-                unigram_count_dict_truthful, truthful_train_word_lists
-            )
-            unigram_prob_dict_deceptive = OpinionSpamModel.get_unigram_probs(
-                unigram_count_dict_deceptive, deceptive_train_word_lists
-            )
-            model = {"truthful": unigram_prob_dict_truthful, "deceptive": unigram_prob_dict_deceptive}
-        elif self.model_type == "bigram":
+        unigram_count_dict_truthful = OpinionSpamModel.get_unigram_counts(truthful_train_word_lists)
+        unigram_count_dict_deceptive = OpinionSpamModel.get_unigram_counts(deceptive_train_word_lists)
+        unigram_prob_dict_truthful = OpinionSpamModel.get_unigram_probs(
+            unigram_count_dict_truthful, truthful_train_word_lists
+        )
+        unigram_prob_dict_deceptive = OpinionSpamModel.get_unigram_probs(
+            unigram_count_dict_deceptive, deceptive_train_word_lists
+        )
+        model = {"unigram_truthful": unigram_prob_dict_truthful, "unigram_deceptive": unigram_prob_dict_deceptive}
+        if self.model_type == "bigram": # add bigram dictionaries to model if model type is bigram
             bigram_count_dict_truthful = OpinionSpamModel.get_bigram_counts(truthful_train_word_lists, unigram_count_dict_truthful)
             bigram_count_dict_deceptive = OpinionSpamModel.get_bigram_counts(deceptive_train_word_lists, unigram_count_dict_deceptive)
 
@@ -156,39 +157,36 @@ class OpinionSpamModel():
                 unigram_prob_dict_deceptive,
                 deceptive_train_word_lists,
             )
-            model = {"truthful": bigram_prob_dict_truthful, "deceptive": bigram_prob_dict_deceptive}
+            model["bigram_truthful"] = bigram_prob_dict_truthful
+            model["bigram_deceptive"] = bigram_prob_dict_deceptive
         elif self.model_type in ["NB", "Naive Bayes"]:
             pass
         self.trained_model = model
         return model
     
     @staticmethod
-    def insert_unks(
-    passage_list, unigram_count_dict_truthful, unigram_count_dict_deceptive
-):
-    """
-    Iterates though all of the words in all of the passages and checks if the word
-    is present in unigram_count_dict. If the word is not present, <unk>
-    gets placed into its position in the passage.
-    :passage_list: list of strings where each string is a passage
-    :unigram_count_dict:
-    :returns passage_list: the list of input passages with its words not present in unigram_count_dict replaced with unk.
-    """
-    for passage, label in passage_list:
-        if label == 0:
-            count_dict = unigram_count_dict_truthful
-        else:
-            count_dict = unigram_count_dict_deceptive
-        for word_idx in range(len(passage)):
-            if count_dict.get(passage[word_idx]) is None:
-                passage[word_idx] = "<unk>"
-    return passage_list
+    def insert_unks(passage_list, unigram_count_dict_truthful, unigram_count_dict_deceptive):
+        """
+        Iterates though all of the words in all of the passages and checks if the word
+        is present in unigram_count_dict. If the word is not present, <unk>
+        gets placed into its position in the passage.
+        :passage_list: list of strings where each string is a passage
+        Returns the list of input passages, where the words not present in unigram_count_dict are replaced with unk.
+        """
+        for passage, label in passage_list:
+            if label == 0:
+                count_dict = unigram_count_dict_truthful
+            else:
+                count_dict = unigram_count_dict_deceptive
+            for word_idx in range(len(passage)):
+                if count_dict.get(passage[word_idx]) is None:
+                    passage[word_idx] = "<unk>"
+        return passage_list
 
-    @staticmethod
-    def compute_perplex(review_list, probability_dict, model_type):
-        num_tokens = count_num_of_tokens(review_list)
+    def compute_perplex(self, review_list, probability_dict):
+        num_tokens = OpinionSpamModel.count_num_of_tokens(review_list)
         perplex_scores = []
-        if model_type == "unigram:"
+        if self.model_type == "unigram":
             for line in review_list:
                 sum_probs = 0
                 for word in line:
@@ -199,7 +197,7 @@ class OpinionSpamModel():
 
                 result_for_line = math.exp(sum_probs / num_tokens)
                 perplex_scores.append(result_for_line)
-        elif model_type = "bigram":
+        elif self.model_type == "bigram":
             for line in review_list:
                 sum_probs = 0
                 for i in range(len(line) - 1):
@@ -228,7 +226,9 @@ class OpinionSpamModel():
         
     @staticmethod
     def make_predictions(complexity_deceptive_list, complexity_truthful_list):
-    "Return the class with the higher perplexity score"
+        """
+        Return the class with the higher perplexity score.
+        """
         preds = []
         for i in range(len(complexity_deceptive_list)):
             if complexity_deceptive_list[i] < complexity_truthful_list[i]:
@@ -249,7 +249,8 @@ class OpinionSpamModel():
     def predict(self, validation_data_path=None):
         if validation_data_path is None:
             validation_data_path = self.validation_data_path
-        # TODO: open access unigram dictionaries here
+        unigram_prob_dict_truthful = self.trained_model["unigram_truthful"]
+        unigram_prob_dict_deceptive = self.trained_model["unigram_deceptive"]
         labeled_validation_passages = OpinionSpamModel.get_passages_from_labeled_txt(validation_data_path)
         validation_word_lists = OpinionSpamModel.convert_passages_to_word_lists(labeled_validation_passages)
         truthful_validation_word_lists = []
@@ -259,7 +260,7 @@ class OpinionSpamModel():
                 truthful_validation_word_lists.append(passage)
             else:
                 deceptive_validation_word_lists.append(passage)
-        transformed_validation_word_lists = OpinionSpamModel.insert_unks(validation_word_lists, unigram_prob_dict_truthful, unigram_count_dict_deceptive)
+        transformed_validation_word_lists = OpinionSpamModel.insert_unks(validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive)
         transformed_valid_reviews_truthful = []
         transformed_valid_reviews_deceptive = []
         for passage, label in transformed_validation_word_lists:
@@ -268,17 +269,17 @@ class OpinionSpamModel():
             else:
                 transformed_valid_reviews_deceptive.append(passage)
         if self.model_type in ["unigram", "bigram"]:
-            perplex_truthful_tprobs = OpinionSpamModel.compute_perplex(
-                transformed_valid_reviews_truthful, self.trained_model["truthful"]
+            perplex_truthful_tprobs = self.compute_perplex(
+                transformed_valid_reviews_truthful, self.trained_model[self.model_type + "_truthful"]
             )
-            perplex_truthful_dprobs = OpinionSpamModel.compute_perplex(
-                transformed_valid_reviews_truthful, self.trained_model["deceptive"]
+            perplex_truthful_dprobs = self.compute_perplex(
+                transformed_valid_reviews_truthful, self.trained_model[self.model_type + "_deceptive"]
             )
-            perplex_deceptive_tprobs = OpinionSpamModel.compute_perplex(
-                transformed_valid_reviews_deceptive, self.trained_model["truthful"]
+            perplex_deceptive_tprobs = self.compute_perplex(
+                transformed_valid_reviews_deceptive, self.trained_model[self.model_type + "_truthful"]
             )
-            perplex_deceptive_dprobs = OpinionSpamModel.compute_perplex(
-                transformed_valid_reviews_deceptive, self.trained_model["deceptive"]
+            perplex_deceptive_dprobs = self.compute_perplex(
+                transformed_valid_reviews_deceptive, self.trained_model[self.model_type + "_deceptive"]
             )
             predictions_truthful = OpinionSpamModel.make_predictions(
                 perplex_truthful_dprobs, perplex_truthful_tprobs
@@ -304,7 +305,10 @@ class OpinionSpamModel():
 if __name__ == "__main__":
     with open(r'new_config.yml') as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
-    OpSpamModel = OpinionSpamModel(config["Model1"])
-    OpSpamModel.train()
+    for model in config.keys():
+        OpSpamModel = OpinionSpamModel(config[model])
+        OpSpamModel.train()
+        prediction_report = OpSpamModel.predict()
+        print(prediction_report)
 
 
