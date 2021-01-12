@@ -160,7 +160,22 @@ class OpinionSpamModel():
             model["bigram_truthful"] = bigram_prob_dict_truthful
             model["bigram_deceptive"] = bigram_prob_dict_deceptive
         elif self.model_type in ["NB", "Naive Bayes"]:
-            pass
+            dec_train_feats = OpinionSpamModel.get_features_all_reviews(
+                deceptive_train_word_lists,
+                unigram_prob_dict_truthful,
+                unigram_prob_dict_deceptive,
+            )
+            tru_train_feats = OpinionSpamModel.get_features_all_reviews(
+                truthful_train_word_lists,
+                unigram_prob_dict_truthful,
+                unigram_prob_dict_deceptive,
+            )
+            label_tru_np = np.zeros(len(truthful_train_word_lists))
+            label_dec_np = np.ones(len(deceptive_train_word_lists))
+            all_feats_train = np.vstack((dec_train_feats, tru_train_feats))
+            all_labels_train = np.concatenate((label_dec_np, label_tru_np))
+            model = MultinomialNB()
+            model.fit(all_feats_train, all_labels_train)
         self.trained_model = model
         return model
     
@@ -244,6 +259,23 @@ class OpinionSpamModel():
             deceptive_accuracy * len(deceptive_predictions)
         ) / (len(truthful_predictions) + len(deceptive_predictions))
         return average_accuracy
+    
+    @staticmethod
+    def get_features_all_reviews(review_list, unigram_prob_dict_tru, unigram_prob_dict_dec):
+        num_tokens = OpinionSpamModel.count_num_of_tokens(review_list)
+        all_features_numpy = np.asarray([])
+        for rev in tqdm(review_list):
+            rev = " ".join(rev)
+            feat_list = get_feature_vector(
+                rev, unigram_prob_dict_tru, unigram_prob_dict_dec, num_tokens
+            )
+            feat_list_numpy = np.asarray(feat_list)
+            if all_features_numpy.size == 0:
+                all_features_numpy = feat_list_numpy
+            else:
+                all_features_numpy = np.vstack([all_features_numpy, feat_list_numpy])
+        all_features_numpy = normalize(all_features_numpy, axis=0, norm="max")
+        return all_features_numpy
 
     
     def predict(self, validation_data_path=None):
@@ -300,7 +332,25 @@ class OpinionSpamModel():
                 predictions_deceptive,
             )
             prediction_report = {"accuracy": average_accuracy}
-            return prediction_report
+        elif self.model_type in ["NB", "Naive Bayes"]:
+            valid_feats_truthful = OpinionSpamModel.get_features_all_reviews(
+                truthful_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
+            )
+            valid_feats_deceptive = OpinionSpamModel.get_features_all_reviews(
+                deceptive_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
+            )
+            NB_predictions_truthful = model.predict(valid_feats_truthful)
+            NB_predictions_deceptive = model.predict(valid_feats_deceptive)
+            NB_accuracy_truthful = eval_preditions(NB_predictions_truthful, "truthful")
+            NB_accuracy_deceptive = eval_preditions(NB_predictions_deceptive, "deceptive")
+            NB_accuracy = calculate_average_accuracy(
+                NB_accuracy_deceptive,
+                NB_predictions_deceptive,
+                NB_accuracy_truthful,
+                NB_predictions_truthful,
+            )
+            prediction_report = {"NB Accuracy": NB_accuracy, "NB Accuracy Deceptive": NB_accuracy_deceptive, "NB Accuracy Truthful": NB_accuracy_truthful}
+        return prediction_report
 
 if __name__ == "__main__":
     with open(r'new_config.yml') as file:
