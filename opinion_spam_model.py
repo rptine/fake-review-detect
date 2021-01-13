@@ -142,6 +142,8 @@ class OpinionSpamModel():
         unigram_prob_dict_deceptive = OpinionSpamModel.get_unigram_probs(
             unigram_count_dict_deceptive, deceptive_train_word_lists
         )
+        self.unigram_truthful = unigram_prob_dict_truthful
+        self.unigram_deceptive = unigram_prob_dict_deceptive
         model = {"unigram_truthful": unigram_prob_dict_truthful, "unigram_deceptive": unigram_prob_dict_deceptive}
         if self.model_type == "bigram": # add bigram dictionaries to model if model type is bigram
             bigram_count_dict_truthful = OpinionSpamModel.get_bigram_counts(truthful_train_word_lists, unigram_count_dict_truthful)
@@ -281,8 +283,8 @@ class OpinionSpamModel():
     def predict(self, validation_data_path=None):
         if validation_data_path is None:
             validation_data_path = self.validation_data_path
-        unigram_prob_dict_truthful = self.trained_model["unigram_truthful"]
-        unigram_prob_dict_deceptive = self.trained_model["unigram_deceptive"]
+        unigram_prob_dict_truthful = self.unigram_truthful
+        unigram_prob_dict_deceptive = self.unigram_deceptive
         labeled_validation_passages = OpinionSpamModel.get_passages_from_labeled_txt(validation_data_path)
         validation_word_lists = OpinionSpamModel.convert_passages_to_word_lists(labeled_validation_passages)
         truthful_validation_word_lists = []
@@ -300,6 +302,7 @@ class OpinionSpamModel():
                 transformed_valid_reviews_truthful.append(passage)
             else:
                 transformed_valid_reviews_deceptive.append(passage)
+        prediction_report = dict(keys={})
         if self.model_type in ["unigram", "bigram"]:
             perplex_truthful_tprobs = self.compute_perplex(
                 transformed_valid_reviews_truthful, self.trained_model[self.model_type + "_truthful"]
@@ -331,7 +334,7 @@ class OpinionSpamModel():
                 accuracy_deceptive,
                 predictions_deceptive,
             )
-            prediction_report = {"accuracy": average_accuracy}
+            prediction_report = {"average_accuracy": "{0:.2%}".format(average_accuracy), "accuracy_truthful": "{0:.2%}".format(accuracy_truthful), "accuracy_deceptive": "{0:.2%}".format(accuracy_deceptive)}
         elif self.model_type in ["NB", "Naive Bayes"]:
             valid_feats_truthful = OpinionSpamModel.get_features_all_reviews(
                 truthful_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
@@ -339,17 +342,17 @@ class OpinionSpamModel():
             valid_feats_deceptive = OpinionSpamModel.get_features_all_reviews(
                 deceptive_validation_word_lists, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
             )
-            NB_predictions_truthful = model.predict(valid_feats_truthful)
-            NB_predictions_deceptive = model.predict(valid_feats_deceptive)
-            NB_accuracy_truthful = eval_preditions(NB_predictions_truthful, "truthful")
-            NB_accuracy_deceptive = eval_preditions(NB_predictions_deceptive, "deceptive")
-            NB_accuracy = calculate_average_accuracy(
+            NB_predictions_truthful = self.trained_model.predict(valid_feats_truthful)
+            NB_predictions_deceptive = self.trained_model.predict(valid_feats_deceptive)
+            NB_accuracy_truthful = OpinionSpamModel.eval_preditions(NB_predictions_truthful, "truthful")
+            NB_accuracy_deceptive = OpinionSpamModel.eval_preditions(NB_predictions_deceptive, "deceptive")
+            NB_accuracy = OpinionSpamModel.calculate_average_accuracy(
                 NB_accuracy_deceptive,
                 NB_predictions_deceptive,
                 NB_accuracy_truthful,
                 NB_predictions_truthful,
             )
-            prediction_report = {"NB Accuracy": NB_accuracy, "NB Accuracy Deceptive": NB_accuracy_deceptive, "NB Accuracy Truthful": NB_accuracy_truthful}
+            prediction_report = {"average_accuracy": "{0:.2%}".format(NB_accuracy), "accuracy_truthful": "{0:.2%}".format(NB_accuracy_truthful), "accuracy_deceptive": "{0:.2%}".format(NB_accuracy_deceptive)}
         return prediction_report
 
 if __name__ == "__main__":
@@ -359,6 +362,7 @@ if __name__ == "__main__":
         OpSpamModel = OpinionSpamModel(config[model])
         OpSpamModel.train()
         prediction_report = OpSpamModel.predict()
-        print(prediction_report)
+        print(f"{model}'s accuracy report: {prediction_report}")
+        pickle.dump(OpSpamModel, open( config[model]["model_output_path"], "wb" ) )
 
 
