@@ -23,38 +23,63 @@ class OpinionSpamModel():
     
     @staticmethod
     def get_passages_from_labeled_txt(filename):
-        list_of_passages = []
+        """
+        Reads text file located at filename, which contains text reviews with labels, removes any 
+        leading white space from the reviews, converts reviews from strings to lists of words, and 
+        builds a list of (review, label) tuples.
+
+        Args:
+            filename: path to .txt file containing a labeled list of reviews, where each review is
+            an entire line in the file, and the following line is its label (0 -> truthful, 1 -> 
+            deceptive).
+
+        Returns:
+            A list of (review, label) tuples where a review is a list of words
+        """
+        list_of_labeled_passages = []
         with open(filename) as f:
             lines = f.readlines()
             for line_idx in range(len(lines) - 1):
                 if lines[line_idx + 1] == "0\n":
-                    list_of_passages.append((lines[line_idx], 0))
+                    list_of_labeled_passages.append((lines[line_idx], 0))
                 elif lines[line_idx + 1] == "1\n":
-                    list_of_passages.append((lines[line_idx], 1))
+                    list_of_labeled_passages.append((lines[line_idx], 1))
                 else:
                     pass  # line_idx is at a label, not a passage
-        list_of_passages = [
-            (passage.strip(), label) for passage, label in list_of_passages
+        list_of_labeled_passages = [
+            (passage.strip().split(" "), label) for passage, label in list_of_labeled_passages
         ]  # strip to remove newline chars
-        return list_of_passages
-    
-    @staticmethod
-    def convert_passages_to_word_lists(passage_list):
-        list_of_word_lists = []
-        for passage, label in passage_list:
-            word_list = passage.split(" ")
-            list_of_word_lists.append((word_list, label))
-        return list_of_word_lists
+        return list_of_labeled_passages
 
     @staticmethod
-    def count_num_of_tokens(review_list):
+    def count_num_of_tokens(list_of_word_lists):
+        """
+        Finds the total number of tokens contained in a list of strings.
+
+        Args:
+            list_of_word_lists: a list of a list of strings, where each string is a word
+
+        Returns:
+            The total number of tokens in the list of strings, where a token is a
+            non-unique word within the string.
+        """
         num_tokens = 0
-        for line in review_list:
+        for line in list_of_strings:
             num_tokens += len(line)
         return num_tokens
     
     @staticmethod
     def get_unigram_counts(list_of_reviews):
+        """
+        Produces a dictionary of unigram counts
+
+        Args:
+            list_of_reviews: a list of reviews
+
+        Returns:
+            The total number of tokens in the list of strings, where a token is a
+            non-unique word within the string.
+        """
         unigram_count_dict = defaultdict(int)
         words_seen_once = {}
         for line in list_of_reviews:
@@ -124,8 +149,7 @@ class OpinionSpamModel():
     def train(self, training_data_path=None):
         if training_data_path is None:
             training_data_path = self.training_data_path
-        labeled_train_passages = OpinionSpamModel.get_passages_from_labeled_txt(training_data_path)
-        train_word_lists = OpinionSpamModel.convert_passages_to_word_lists(labeled_train_passages)
+        train_word_lists = OpinionSpamModel.get_passages_from_labeled_txt(training_data_path)
         # split training word lists into truthful and deceptive sets
         truthful_train_word_lists = []
         deceptive_train_word_lists = []
@@ -285,8 +309,7 @@ class OpinionSpamModel():
             validation_data_path = self.validation_data_path
         unigram_prob_dict_truthful = self.unigram_truthful
         unigram_prob_dict_deceptive = self.unigram_deceptive
-        labeled_validation_passages = OpinionSpamModel.get_passages_from_labeled_txt(validation_data_path)
-        validation_word_lists = OpinionSpamModel.convert_passages_to_word_lists(labeled_validation_passages)
+        validation_word_lists = OpinionSpamModel.get_passages_from_labeled_txt(validation_data_path)
         truthful_validation_word_lists = []
         deceptive_validation_word_lists = []
         for passage, label in validation_word_lists:
