@@ -294,22 +294,32 @@ class OpinionSpamModel():
                     passage[word_idx] = "<unk>"
         return list_of_word_lists
 
-    def compute_perplex(self, review_list, probability_dict):
-        num_tokens = OpinionSpamModel.count_num_of_tokens(review_list)
+    def compute_perplex(self, list_of_word_lists, probability_dict):
+        """
+        Computes the perplexity score for each word list in the list_of_word_lists. 
+
+        Arguments:
+            list_of_word_lists: a list of word lists
+            probability_dict: a unigram or bigram probability dictionary, mapping unigrams
+            or bigrams to respective probabilities.
+        
+        Returns: 
+            A list containing the perplexity score for each word list in the list_of_word_lists.
+        """
+        num_tokens = OpinionSpamModel.count_num_of_tokens(list_of_word_lists)
         perplex_scores = []
         if self.model_type == "unigram":
-            for line in review_list:
+            for line in list_of_word_lists:
                 sum_probs = 0
                 for word in line:
                     prob = probability_dict.get(word)
                     if prob is None:
                         prob = probability_dict.get("<unk>")
                     sum_probs -= math.log(prob)
-
                 result_for_line = math.exp(sum_probs / num_tokens)
                 perplex_scores.append(result_for_line)
         elif self.model_type == "bigram":
-            for line in review_list:
+            for line in list_of_word_lists:
                 sum_probs = 0
                 for i in range(len(line) - 1):
                     prob = 0
@@ -324,6 +334,17 @@ class OpinionSpamModel():
     
     @staticmethod
     def eval_preditions(prediction_list, list_actuals):
+        """
+        Computes the perplexity score for each word list in the list_of_word_lists. 
+
+        Arguments:
+            list_of_word_lists: a list of word lists
+            probability_dict: a unigram or bigram probability dictionary, mapping unigrams
+            or bigrams to respective probabilities.
+        
+        Returns: 
+            A list containing the perplexity score for each word list in the list_of_word_lists.
+        """
         if list_actuals == "truthful":
             true_val = 0
         elif list_actuals == "deceptive":
@@ -338,7 +359,18 @@ class OpinionSpamModel():
     @staticmethod
     def make_predictions(complexity_deceptive_list, complexity_truthful_list):
         """
-        Return the class with the higher perplexity score.
+        Builds a list of predictions, where 0 denotes truthful & 1 denotes deceptive. Iterates
+        through both lists and adds the class with the higher perplexity score to the list.
+
+        Arguments:
+            complexity_deceptive_list: a list of perplexity scores computed with the deceptive
+            probability dictionary.
+            complexity_truthful_list: a list of perplexity scores computed with the truthful
+            probability dictionary. The indices in this list must align with complexity_deceptive_list,
+            such that the socre at each index was calculated upon the same review.
+        
+        Returns:
+            A list of predictions, where 0 denotes truthful & 1 denotes deceptive.
         """
         preds = []
         for i in range(len(complexity_deceptive_list)):
@@ -349,18 +381,33 @@ class OpinionSpamModel():
         return preds
     
     @staticmethod
-    def calculate_average_accuracy(truthful_accuracy, truthful_predictions, deceptive_accuracy, deceptive_predictions):
+    def calculate_average_accuracy(truthful_accuracy, num_truthful_predictions, deceptive_accuracy, num_deceptive_predictions):
+        """
+        Calculates the overall average accuracy, given: the truthful accuracy & number of truthful
+        predictions and the deceptive accuracy & number of deceptive predictions.
+
+        Arguments:
+            truthful_accuracy: a proportion (0 to 1) representing the proportion of correct 
+            truthful predictions
+            num_truthful_predictions: the number of predictions made on truthful reviews
+            deceptive_accuracy: a proportion (0 to 1) representing the proportion of correct 
+            deceptive predictions
+            truthful_predictions: the number of predictions made on deceptive reviews
+        
+        Returns:
+            A float (0 to 1) denoting the overall accuracy
+        """
         average_accuracy = (
-            truthful_accuracy * len(truthful_predictions) + 
+            truthful_accuracy * num_truthful_predictions + 
             deceptive_accuracy * len(deceptive_predictions)
-        ) / (len(truthful_predictions) + len(deceptive_predictions))
+        ) / (num_truthful_predictions + num_deceptive_predictions)
         return average_accuracy
     
     @staticmethod
-    def get_features_all_reviews(review_list, unigram_prob_dict_tru, unigram_prob_dict_dec):
-        num_tokens = OpinionSpamModel.count_num_of_tokens(review_list)
+    def get_features_all_reviews(list_of_word_lists, unigram_prob_dict_tru, unigram_prob_dict_dec):
+        num_tokens = OpinionSpamModel.count_num_of_tokens(list_of_word_lists)
         all_features_numpy = np.asarray([])
-        for rev in tqdm(review_list):
+        for rev in tqdm(list_of_word_lists):
             rev = " ".join(rev)
             feat_list = feat_extract.get_feature_vector(
                 rev, unigram_prob_dict_tru, unigram_prob_dict_dec, num_tokens
@@ -418,9 +465,9 @@ class OpinionSpamModel():
             )
             average_accuracy = OpinionSpamModel.calculate_average_accuracy(
                 accuracy_truthful,
-                predictions_truthful,
+                len(predictions_truthful),
                 accuracy_deceptive,
-                predictions_deceptive,
+                len(predictions_deceptive),
             )
             prediction_report = {"average_accuracy": "{0:.2%}".format(average_accuracy), "accuracy_truthful": "{0:.2%}".format(accuracy_truthful), "accuracy_deceptive": "{0:.2%}".format(accuracy_deceptive)}
         elif self.model_type in ["NB", "Naive Bayes"]:
@@ -435,10 +482,10 @@ class OpinionSpamModel():
             NB_accuracy_truthful = OpinionSpamModel.eval_preditions(NB_predictions_truthful, "truthful")
             NB_accuracy_deceptive = OpinionSpamModel.eval_preditions(NB_predictions_deceptive, "deceptive")
             NB_accuracy = OpinionSpamModel.calculate_average_accuracy(
-                NB_accuracy_deceptive,
-                NB_predictions_deceptive,
                 NB_accuracy_truthful,
-                NB_predictions_truthful,
+                len(NB_predictions_truthful),
+                NB_accuracy_deceptive,
+                len(NB_predictions_deceptive),
             )
             prediction_report = {"average_accuracy": "{0:.2%}".format(NB_accuracy), "accuracy_truthful": "{0:.2%}".format(NB_accuracy_truthful), "accuracy_deceptive": "{0:.2%}".format(NB_accuracy_deceptive)}
         return prediction_report
