@@ -1,4 +1,8 @@
-scikit-learn>=0.20.4
+empath>=0.89
 nltk>=3.5
 numpy>=1.16.6
+pandas>=1.2.1
 pyyaml>=5.3.1
+scikit-learn>=0.20.4
+textstat>=0.7.0
+vaderSentiment>=3.3.2

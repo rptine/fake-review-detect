@@ -289,10 +289,10 @@ class OpinionSpamModel():
             words_seen_during_training is replaced with <unk>.
         """
         for passage, label in list_of_word_lists:
-            for word in passage:
-                if word not in words_seen_during_training:
+            for word_idx in range(len(passage)):
+                if passage[word_idx] not in words_seen_during_training:
                     passage[word_idx] = "<unk>"
-        return list_of_word_lists
+        return passage
 
     def compute_perplex(self, list_of_word_lists, probability_dict):
         """
@@ -309,9 +309,9 @@ class OpinionSpamModel():
         num_tokens = OpinionSpamModel.count_num_of_tokens(list_of_word_lists)
         perplex_scores = []
         if self.model_type == "unigram":
-            for line in list_of_word_lists:
+            for word_list in list_of_word_lists:
                 sum_probs = 0
-                for word in line:
+                for word in word_list:
                     prob = probability_dict.get(word)
                     if prob is None:
                         prob = probability_dict.get("<unk>")
@@ -399,12 +399,25 @@ class OpinionSpamModel():
         """
         average_accuracy = (
             truthful_accuracy * num_truthful_predictions + 
-            deceptive_accuracy * len(deceptive_predictions)
+            deceptive_accuracy * num_deceptive_predictions
         ) / (num_truthful_predictions + num_deceptive_predictions)
         return average_accuracy
     
     @staticmethod
     def get_features_all_reviews(list_of_word_lists, unigram_prob_dict_tru, unigram_prob_dict_dec):
+        """
+        Produces a list of features to be used for training an sklearn model
+
+        Arguments:
+            list_of_word_lists: a list of word lists
+            unigram_prob_dict_tru: dictionary mapping unigrams found in truthful reviews to their 
+            respective probabilities
+            unigram_prob_dict_dec: dictionary mapping unigrams found in deceptive reviews to their
+            respective probabilities
+
+        Returns:
+            A list of features to be used for training an sklearn model
+        """
         num_tokens = OpinionSpamModel.count_num_of_tokens(list_of_word_lists)
         all_features_numpy = np.asarray([])
         for rev in tqdm(list_of_word_lists):
@@ -422,6 +435,16 @@ class OpinionSpamModel():
 
     
     def predict(self, validation_data_path=None):
+        """
+        Encapsulation of logic for obtaining predictions for three types (unigram, bigram and
+        Naive Bayes) of opinion spam models on a list of reviews.
+
+        Attributes:
+            validation_data_path: Path to .txt file containing validation reviews
+
+        Returns
+            A prediction report containing the model's accuracy on the validation reviews
+        """
         if validation_data_path is None:
             validation_data_path = self.validation_data_path
         unigram_prob_dict_truthful = self.unigram_truthful
