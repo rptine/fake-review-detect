@@ -1,4 +1,16 @@
-train: 
-  "DATASET/train/train_labeled.txt"
-validation: 
-  "DATASET/validation/validation_labeled.txt"
+Unigram:
+  model_type: "unigram"
+  training_data_path: "DATASET/train/train_labeled.txt"
+  validation_data_path: "DATASET/validation/validation_labeled.txt"
+  model_output_path: "models/unigram.pckl"
+Bigram:
+  model_type: "bigram"
+  training_data_path: "DATASET/train/train_labeled.txt"
+  validation_data_path: "DATASET/validation/validation_labeled.txt"
+  model_output_path: "models/bigram.pckl"
+NB:
+  model_type: "NB"
+  training_data_path: "DATASET/train/train_labeled.txt"
+  validation_data_path: "DATASET/validation/validation_labeled.txt"
+  model_output_path: "models/NB.pckl"
+  

@@ -101,7 +101,6 @@ class OpinionSpamModel():
             to the number of occurrences.
         """
         unigram_count_dict = defaultdict(int)
-        words_seen_once = {} # TODO: Clarify UNK handling and remove
         for line in list_of_word_lists:
             for word in line:
                 unigram_count_dict[word] += 1
@@ -241,10 +240,9 @@ class OpinionSpamModel():
         if self.model_type == "bigram": # add bigram dictionaries to model if model type is bigram
             bigram_count_dict_truthful = OpinionSpamModel.build_bigram_count_dict(truthful_train_word_lists, unigram_count_dict_truthful)
             bigram_count_dict_deceptive = OpinionSpamModel.build_bigram_count_dict(deceptive_train_word_lists, unigram_count_dict_deceptive)
-
             bigram_prob_dict_truthful = OpinionSpamModel.get_bigram_prob_dict(
                 bigram_count_dict_truthful,
-                unigram_count_dict_truthful,
+                unigram_prob_dict_truthful,
                 truthful_train_word_lists,
             )
             bigram_prob_dict_deceptive = OpinionSpamModel.get_bigram_prob_dict(
@@ -288,11 +286,11 @@ class OpinionSpamModel():
             A modified version of the input list_of_word_lists, where each word not present in
             words_seen_during_training is replaced with <unk>.
         """
-        for passage, label in list_of_word_lists:
+        for passage in list_of_word_lists:
             for word_idx in range(len(passage)):
                 if passage[word_idx] not in words_seen_during_training:
                     passage[word_idx] = "<unk>"
-        return passage
+        return list_of_word_lists
 
     def compute_perplex(self, list_of_word_lists, probability_dict):
         """
@@ -406,7 +404,7 @@ class OpinionSpamModel():
     @staticmethod
     def get_features_all_reviews(list_of_word_lists, unigram_prob_dict_tru, unigram_prob_dict_dec):
         """
-        Produces a list of features to be used for training an sklearn model
+        Produces a list of features to be used for training an sklearn model.
 
         Arguments:
             list_of_word_lists: a list of word lists
@@ -458,8 +456,8 @@ class OpinionSpamModel():
                 truthful_validation_word_lists.append(word_list)
             else:
                 deceptive_validation_word_lists.append(word_list)
-        truthful_transformed_validation_word_lists = OpinionSpamModel.insert_unks(labeled_validation_word_lists, unigram_prob_dict_truthful.keys())
-        deceptive_transformed_validation_word_lists = OpinionSpamModel.insert_unks(labeled_validation_word_lists, unigram_prob_dict_deceptive.keys())
+        truthful_transformed_validation_word_lists = OpinionSpamModel.insert_unks(truthful_validation_word_lists, unigram_prob_dict_truthful.keys())
+        deceptive_transformed_validation_word_lists = OpinionSpamModel.insert_unks(deceptive_validation_word_lists, unigram_prob_dict_deceptive.keys())
         prediction_report = dict(keys={})
         if self.model_type in ["unigram", "bigram"]:
             perplex_truthful_tprobs = self.compute_perplex(
@@ -514,7 +512,7 @@ class OpinionSpamModel():
         return prediction_report
 
 if __name__ == "__main__":
-    with open(r'new_config.yml') as file:
+    with open(r'config.yml') as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     for model in config.keys():
         OpSpamModel = OpinionSpamModel(config[model])
