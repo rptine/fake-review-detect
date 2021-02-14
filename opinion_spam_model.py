@@ -121,26 +121,28 @@ class OpinionSpamModel():
             A dictionary of bigram counts, mapping unique pairs of successive words in 
             list_of_word_lists to the number of occurrences.
         """
-        # unigram_count_dict =
         bigram_count_dict = defaultdict(int)
-        words_seen_once = {}
-        for sentence in list_of_word_lists:
-            for i in range(len(sentence) - 1):
-                if (sentence[i] in words_seen_once.keys()) and (
-                    sentence[i + 1] in words_seen_once.keys()
+        words_seen_once = defaultdict(int)
+        for line in list_of_word_lists:
+            for i in range(len(line) - 1):
+                if (line[i] in words_seen_once.keys()) and ( 
+                    line[i + 1] in words_seen_once.keys()
                 ):
-                    bigram_count_dict[sentence[i] + " " + sentence[i + 1]] += 1
-                elif (sentence[i] in words_seen_once.keys()) and (
-                    not sentence[i + 1] in words_seen_once.keys()
+                    bigram_count_dict[line[i] + " " + line[i + 1]] += 1
+                elif (line[i] in words_seen_once.keys()) and ( 
+                    not line[i + 1] in words_seen_once.keys()
                 ):
-                    bigram_count_dict[sentence[i] + " " + "<unk>"] += 1
-                else:  # case where this is the first occurence of both words
-                    if (sentence[i + 1] in words_seen_once.keys()):
-                        bigram_count_dict["<unk>" + " " + sentence[i]] += 1
-                    words_seen_once[
-                        sentence[i]
-                    ] = 0  # add word to words seen once dictionary
-        bigram_count_dict["<unk> <unk>"] = 1  # add 1 to unkown count
+                    bigram_count_dict[line[i] + " " + "<unk>"] += 1
+                    words_seen_once[line[i + 1]] = 0
+                elif (not line[i] in words_seen_once.keys()) and (
+                    line[i + 1] in words_seen_once.keys()
+                ): 
+                    bigram_count_dict["<unk>" + " " + line[i]] += 1
+                    words_seen_once[line[i]] = 0
+                else:
+                    words_seen_once[line[i]] = 0
+                    words_seen_once[line[i + 1]] = 0  
+        bigram_count_dict["<unk> <unk>"] = 1
         return bigram_count_dict
     
     @staticmethod
@@ -155,12 +157,13 @@ class OpinionSpamModel():
 
         Returns:
             A dictionary mapping unigrams to their respective probabilities for all unigrams in the
-            unigram_count_dict. The probability is calculated from relative the counts of each
+            unigram_count_dict. The probability is calculated from the relative the counts of each
             unigram and incorporates plus-one-smoothing.
         """
         num_tokens = OpinionSpamModel.count_num_of_tokens(list_of_word_lists)
-        token_count_smoothed = num_tokens + len(unigram_count_dict.keys())
-        unigram_prob_dict = {k: ((v + 1) / token_count_smoothed) for k, v in unigram_count_dict.items()}
+        # Add the number of unigrams to num_tokens, since 1 is added to the numerator for each unigram
+        num_tokens_smoothed = num_tokens + len(unigram_count_dict.keys())
+        unigram_prob_dict = {k: ((v + 1) / num_tokens_smoothed) for k, v in unigram_count_dict.items()}
         return unigram_prob_dict
 
     @staticmethod
@@ -177,26 +180,15 @@ class OpinionSpamModel():
 
         Returns:
             A dictionary mapping bigrams to their respective probabilities, for all bigrams in the
-            bigram_count_dict. The probability is calculated from relative the counts of each
-            bigram_count_dict and incorporates plus-one-smoothing.
+            bigram_count_dict. The probability is calculated from the relative the counts of each
+            bigram and incorporates plus-one-smoothing.
         """
         # Using formula: P(Bigram|FirstWord) = P(FirstWord and Bigram) / P(FirstWord)
-        word_dict_with_unk = defaultdict(int)
-        words_seen_once = {}
-        for line in list_of_word_lists:
-            for word in line:
-                if word in words_seen_once.keys():
-                    word_dict_with_unk[word] += 1
-                else: # case where this is the first occurence in the word
-                    word_dict_with_unk["<unk>"] += 1  # add 1 to unkown count
-                    words_seen_once[word] = 0  # add word to words seen once dictionary
         bigram_prob_dict = defaultdict(int)
         for bigram_key in bigram_count_dict.keys():
             bigram_key_count = bigram_count_dict.get(bigram_key)
             first_word = bigram_key.split(" ")[0]
-            first_word_count = word_dict_with_unk.get(first_word)
-            if first_word_count is None:
-                first_word_count = word_dict_with_unk.get("<unk>")
+            first_word_count = unigram_count_dict.get(first_word)
             count_bigram_smoothed = bigram_key_count + 1
             count_first_word_smoothed = first_word_count + len(bigram_count_dict.keys())
             cond_prob = count_bigram_smoothed / count_first_word_smoothed
