@@ -141,7 +141,7 @@ class OpinionSpamModel():
                     words_seen_once[line[i]] = 0
                 else:
                     words_seen_once[line[i]] = 0
-                    words_seen_once[line[i + 1]] = 0  
+                    words_seen_once[line[i + 1]] = 0
         bigram_count_dict["<unk> <unk>"] = 1
         return bigram_count_dict
     
@@ -167,32 +167,36 @@ class OpinionSpamModel():
         return unigram_prob_dict
 
     @staticmethod
-    def get_bigram_prob_dict(bigram_count_dict, unigram_count_dict, list_of_word_lists):
+    def get_bigram_prob_dict(bigram_count_dict, unigram_count_dict, unigram_prob_dict):
         """
         Produces a dictionary of bigram probabilities for all bigrams in the bigram_count_dict.
 
         Args:
-            bigram_count_dict: a dictionary mapping bigrams (pairs of successive words) to their respective counts
-            in the list_of_word_lists
+            bigram_count_dict: a dictionary mapping bigrams (pairs of successive words) to their
+            respective counts
             unigram_count_dict: a dictionary mapping unigrams (single words) to their respective
-            counts in the list_of_word_lists
-            list_of_word_lists: a list of word lists
+            counts
+            unigram_count_dict: a dictionary mapping unigrams (single words) to their respective
+            probabilities.
+            All three of the above dictionaries should be derived from the same source text.
 
         Returns:
             A dictionary mapping bigrams to their respective probabilities, for all bigrams in the
             bigram_count_dict. The probability is calculated from the relative the counts of each
             bigram and incorporates plus-one-smoothing.
         """
-        # Using formula: P(Bigram|FirstWord) = P(FirstWord and Bigram) / P(FirstWord)
+        # Probability for each bigram is calculated using:
+        # P(Bigram|FirstWord) = Number of Bigram Occurrences / Number of First Word in Bigram Occurrences
         bigram_prob_dict = defaultdict(int)
         for bigram_key in bigram_count_dict.keys():
             bigram_key_count = bigram_count_dict.get(bigram_key)
             first_word = bigram_key.split(" ")[0]
             first_word_count = unigram_count_dict.get(first_word)
-            count_bigram_smoothed = bigram_key_count + 1
-            count_first_word_smoothed = first_word_count + len(bigram_count_dict.keys())
-            cond_prob = count_bigram_smoothed / count_first_word_smoothed
-            bigram_prob_dict[bigram_key] = cond_prob
+            if first_word_count > 10:
+                first_word_count = 10
+            cond_prob = bigram_key_count / first_word_count
+            bigram_prob = cond_prob * unigram_prob_dict.get(first_word)
+            bigram_prob_dict[bigram_key] = bigram_prob
         return bigram_prob_dict
     
     def train(self, training_data_path=None):
@@ -234,13 +238,13 @@ class OpinionSpamModel():
             bigram_count_dict_deceptive = OpinionSpamModel.build_bigram_count_dict(deceptive_train_word_lists, unigram_count_dict_deceptive)
             bigram_prob_dict_truthful = OpinionSpamModel.get_bigram_prob_dict(
                 bigram_count_dict_truthful,
+                unigram_count_dict_truthful,
                 unigram_prob_dict_truthful,
-                truthful_train_word_lists,
             )
             bigram_prob_dict_deceptive = OpinionSpamModel.get_bigram_prob_dict(
                 bigram_count_dict_deceptive,
+                unigram_count_dict_deceptive,
                 unigram_prob_dict_deceptive,
-                deceptive_train_word_lists,
             )
             model["bigram_truthful"] = bigram_prob_dict_truthful
             model["bigram_deceptive"] = bigram_prob_dict_deceptive
@@ -350,7 +354,7 @@ class OpinionSpamModel():
     def make_predictions(complexity_deceptive_list, complexity_truthful_list):
         """
         Builds a list of predictions, where 0 denotes truthful & 1 denotes deceptive. Iterates
-        through both lists and adds the class with the higher perplexity score to the list.
+        through both lists and adds the class with the lower perplexity score to the output list.
 
         Arguments:
             complexity_deceptive_list: a list of perplexity scores computed with the deceptive
