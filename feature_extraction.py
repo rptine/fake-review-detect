@@ -17,27 +17,72 @@ analyser = SentimentIntensityAnalyzer()
 lexicon = Empath()
 
 
-def remove_stopwords(review):
-	word_list = review.split(' ')
+def remove_stopwords(text):
+	"""
+	Removes stopwords identified by nltk.corpus from the input text.
+
+	Arguments:
+		text: string containing text to remove stopwords from
+
+	Returns:
+		The input text with stopwords removed
+	"""
+	word_list = text.split(' ')
 	filtered_words = [word for word in word_list if word not in stopwords.words('english')]
 	new_rev = " ".join(filtered_words)
 	return new_rev
 
-def get_sentiment_neg(review): 
-	score = analyser.polarity_scores(review)
-	return [score['neg']] 
+def get_sentiment_neg(text): 
+	"""
+	Obtains the negative sentiment polarity score from the input text, using vaderSentiment analyzer
 
-def get_sentiment_pos(review):
-	score = analyser.polarity_scores(review)
-	return [score['pos']]
+	Arguments:
+		text: string containing text to calculate the negative sentiment of
+
+	Returns:
+		The negative polarity score calculated from the input text
+	"""
+	score = analyser.polarity_scores(text)
+	return score['neg']
+
+def get_sentiment_pos(text):
+	"""
+	Obtains the positive sentiment polarity score from the input text, using vaderSentiment analyzer
+
+	Arguments:
+		text: string containing text to calculate the positive sentiment of
+
+	Returns:
+		The positive polarity score calculated from the input text
+	"""
+	score = analyser.polarity_scores(text)
+	return score['pos']
 
 
-def get_readabilty(review): 
-	readbilty = textstat.flesch_reading_ease(review)
-	return [readbilty]
+def get_readabilty(text):
+	"""
+	Obtains the readability from the input text, using textstat's flesch_reading_ease
+
+	Arguments:
+		text: string containing text to calculate the positive sentiment of
+
+	Returns:
+		The positive polarity score calculated from the input text
+	"""
+	readbilty = textstat.flesch_reading_ease(text)
+	return readbilty
 
 
 def get_parts_of_speech(review):
+	"""
+	Obtains the readability from the input text, using textstat's flesch_reading_ease
+
+	Arguments:
+		text: string containing text to calculate the positive sentiment of
+
+	Returns:
+		The positive polarity score calculated from the input text
+	"""
 	tokens = nltk.word_tokenize(review.lower())
 	text = nltk.Text(tokens)
 	tagged = nltk.pos_tag(text, tagset='universal')
@@ -51,17 +96,45 @@ def get_parts_of_speech(review):
 	return [punc,noun, verb, pron, adj]
 
 
-def uppercase_char_count(review):
-   	y = len(re.findall(r'[A-Z]',review))
-   	return [y]
+def get_uppercase_char_count(text):
+	"""
+	Obtains the number of uppercase characters in the input text
 
-def exclamation_count(review):
-	c = review.count("!")
-	return [c]
+	Arguments:
+		text: string containing text to count the uppercase characters in.
 
-def get_len(review):
-	rev_list = review.split(" ")
-	return [len(rev_list)]
+	Returns:
+		The number of uppercase characters in the input text
+	"""
+   	num_upper = len(re.findall(r'[A-Z]', text))
+   	return num_upper
+
+def get_exclamation_count(text):
+	"""
+	Obtains the number of exclamation points in the input text
+
+	Arguments:
+		text: string containing text to count the exclamation points in.
+
+	Returns:
+		The number of exclamation points in the input text
+	"""
+	c = text.count("!")
+	return c
+
+def get_len(text):
+	"""
+	Obtains the length of the input text, in number of characters
+
+	Arguments:
+		text: string containing text to find the length of
+
+	Returns:
+		The length of the input text
+	"""
+	text_formatted = text.split(" ")
+	length_of_text = len(text_formatted)
+	return length_of_text
 
 
 def get_empath_results(review):
@@ -114,12 +187,12 @@ def get_feature_vector(review, unigram_prob_dict_tru, unigram_prob_dict_dec, n):
 
 	feats.extend(get_empath_results(review_filtered))
 	
-	feats.extend(get_sentiment_neg(review_filtered))
-	feats.extend(get_readabilty(review))
+	feats.append(get_sentiment_neg(review_filtered))
+	feats.append(get_readabilty(review))
 	feats.extend(get_parts_of_speech(review_filtered))
-	feats.extend(uppercase_char_count(review))
-	feats.extend(exclamation_count(review))
-	feats.extend(get_len(review_filtered))
+	feats.append(get_uppercase_char_count(review))
+	feats.append(get_exclamation_count(review))
+	feats.append(get_len(review_filtered))
 	
 	feats.extend(word_count_feats(review_filtered, unigram_prob_dict_tru, unigram_prob_dict_dec))
 
