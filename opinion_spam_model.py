@@ -185,13 +185,12 @@ class OpinionSpamModel():
             bigram_count_dict. The probability is calculated from the relative the counts of each
             bigram and incorporates plus-one-smoothing.
         """
-        # Probability for each bigram is calculated using:
-        # P(Bigram|FirstWord) = Number of Bigram Occurrences / Number of First Word in Bigram Occurrences
         bigram_prob_dict = defaultdict(int)
         for bigram_key in bigram_count_dict.keys():
             bigram_key_count = bigram_count_dict.get(bigram_key)
             first_word = bigram_key.split(" ")[0]
             first_word_count = unigram_count_dict.get(first_word)
+             # cap first word count at 10 to avoid assigning bigrams with common first words low probs
             if first_word_count > 10:
                 first_word_count = 10
             cond_prob = bigram_key_count / first_word_count
@@ -204,7 +203,7 @@ class OpinionSpamModel():
         Encapsulation of logic for training three types (unigram, bigram and Naive Bayes) of 
         opinion spam models.
 
-        Attributes:
+        Args:
             training_data_path: Path to .txt file containing training data
 
         Returns
@@ -274,7 +273,7 @@ class OpinionSpamModel():
         Replaces strings in the list_of_word_lists that do not appear as keys in 
         words_seen_during_training with the string <unk>.
 
-        Arguments:
+        Args:
             list_of_word_lists: a list of word lists
             words_seen_during_training: a list of words seen during training
         
@@ -292,7 +291,7 @@ class OpinionSpamModel():
         """
         Computes the perplexity score for each word list in the list_of_word_lists. 
 
-        Arguments:
+        Args:
             list_of_word_lists: a list of word lists
             probability_dict: a unigram or bigram probability dictionary, mapping unigrams
             or bigrams to respective probabilities.
@@ -331,7 +330,7 @@ class OpinionSpamModel():
         """
         Computes the perplexity score for each word list in the list_of_word_lists. 
 
-        Arguments:
+        Args:
             list_of_word_lists: a list of word lists
             probability_dict: a unigram or bigram probability dictionary, mapping unigrams
             or bigrams to respective probabilities.
@@ -356,7 +355,7 @@ class OpinionSpamModel():
         Builds a list of predictions, where 0 denotes truthful & 1 denotes deceptive. Iterates
         through both lists and adds the class with the lower perplexity score to the output list.
 
-        Arguments:
+        Args:
             complexity_deceptive_list: a list of perplexity scores computed with the deceptive
             probability dictionary.
             complexity_truthful_list: a list of perplexity scores computed with the truthful
@@ -380,7 +379,7 @@ class OpinionSpamModel():
         Calculates the overall average accuracy, given: the truthful accuracy & number of truthful
         predictions and the deceptive accuracy & number of deceptive predictions.
 
-        Arguments:
+        Args:
             truthful_accuracy: a proportion (0 to 1) representing the proportion of correct 
             truthful predictions
             num_truthful_predictions: the number of predictions made on truthful reviews
@@ -402,7 +401,7 @@ class OpinionSpamModel():
         """
         Produces a list of features to be used for training an sklearn model.
 
-        Arguments:
+        Args:
             list_of_word_lists: a list of word lists
             unigram_prob_dict_tru: dictionary mapping unigrams found in truthful reviews to their 
             respective probabilities
@@ -433,7 +432,7 @@ class OpinionSpamModel():
         Encapsulation of logic for obtaining predictions for three types (unigram, bigram and
         Naive Bayes) of opinion spam models on a list of reviews.
 
-        Attributes:
+        Args:
             validation_data_path: Path to .txt file containing validation reviews
 
         Returns

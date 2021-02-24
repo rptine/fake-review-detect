@@ -3,17 +3,17 @@ Three models, unigram, bigram, and Naive Bayes, for detecting reviews that conta
 
 ## Effectiveness
 ### Unigram Model
-Average Overall Accuracy: 88.24%
-Accuracy On Truthful: 77.95%
-Acuracy On Deceptive: 98.44%
+Average Overall Accuracy: 88.24% <br>
+Accuracy On Truthful: 77.95% <br>
+Acuracy On Deceptive: 98.44% <br>
 ### Bigram Model
-Average Overall Accuracy: 89.02%
-Accuracy On Truthful: 88.19%
-Acuracy On Deceptive: 89.84%
+Average Overall Accuracy: 89.02% <br>
+Accuracy On Truthful: 88.19% <br>
+Acuracy On Deceptive: 89.84% <br>
 ## Naive Bayes
-Average Overall Accuracy: 90.20%
-Accuracy On Truthful: 83.46%
-Acuracy On Deceptive: 96.88%
+Average Overall Accuracy: 90.59% <br>
+Accuracy On Truthful: 84.25% <br>
+Acuracy On Deceptive: 96.88% <br>
 
 ## Implementation Details
 ### Probability Calculation + Smoothing
