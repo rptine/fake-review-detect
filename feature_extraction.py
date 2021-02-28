@@ -107,10 +107,10 @@ def get_uppercase_char_count(text):
     Obtains the number of uppercase characters in the input text
 
     Args:
-      text: string containing text to count the uppercase characters in.
+        text: string containing text to count the uppercase characters in.
 
     Returns:
-      The number of uppercase characters in the input text
+        The number of uppercase characters in the input text
     """
     num_upper = len(re.findall(r"[A-Z]", text))
     return num_upper
@@ -162,64 +162,71 @@ def get_empath_scores(text):
     return empath_scores
 
 
-def get_word_count_lst(review, unigram_prob_dict_tru, unigram_prob_dict_dec):
+def get_word_count_lst(text, unigram_prob_dict_truthful, unigram_prob_dict_deceptive):
     """
-    Converts a unigram dictionary into a list.
-    Produces a list, where each unique word in the unigram dictionary is represented
-    by an index in the list, and the value at the list is the unigram's count.
+    Produces a list, where each unique word in the unigram dictionaries is assigned to an
+    index, and the value at the index is the number of times that unigram appears in the text.
+    Words in the text that do not appear in the unigram dictionaries are ignored.
 
     Args:
         text: string containing text to find the perplexity of
-        unigram_prob_dict: a dictionary mapping unigrams in the text to respecitve
-        probabilities
+        unigram_prob_dict_truthful: a dictionary mapping unigrams found in truthful reviews
+        to their respective probabilities
+        unigram_prob_dict_deceptive: a dictionary mapping unigrams found in deceptive reviews
+        to their respective probabilities
 
     Returns:
-        The perplexity of the text represented as a float
+        A list representing the occurences of the words in the text (only words that appear
+        in the unigram dictionaries are captured)
     """
-    uni_keys_tru = list(unigram_prob_dict_tru.keys())
-    uni_keys_dec = list(unigram_prob_dict_dec.keys())
-    num_unks = 0
-    training_keys = sorted(uni_keys_tru + list(set(uni_keys_dec) - set(uni_keys_tru)))
+    training_keys_trutuful = list(unigram_prob_dict_truthful.keys())
+    training_keys_deceptive = list(unigram_prob_dict_deceptive.keys())
+    all_training_keys = sorted(
+        training_keys_trutuful
+        + list(set(training_keys_deceptive) - set(training_keys_trutuful))
+    )
 
-    word_count_lst = [0] * len(training_keys)
-
-    review_list = review.split(" ")
-    for word in review_list:
-      try:
-        idx = training_keys.index(word)
-        word_count_lst[idx] = word_count_lst[idx] + 1
-      except:
-        num_unks += 1
+    word_count_lst = [0] * len(all_training_keys)
+    text_lst = text.split(" ")
+    for word in text_lst:
+        try:
+            idx = all_training_keys.index(word)  # unseen word will not be found
+            word_count_lst[idx] = word_count_lst[idx] + 1
+        except:
+            pass
 
     return word_count_lst
 
 
-def get_feature_vector(text, unigram_prob_dict_tru, unigram_prob_dict_dec, num_tokens):
+def get_feature_vector(text, unigram_prob_dict_truthful, unigram_prob_dict_deceptive):
     """
     Generates a feature vector based off characteristics of text. Orchestrates calls
     to helper functions that each return a subset of the features to be used.
 
     Args:
-        text: string containing text to find the perplexity of
-        unigram_prob_dict: a dictionary mapping unigrams in the text to respecitve
-        probabilities
-        TODO: reduce to one dict
+        text: string containing text to generate a feature vector for
+        unigram_prob_dict_truthful: a dictionary mapping unigrams in truthful reviews to their
+        respecitve probabilities
+        unigram_prob_dict_deceptive: a dictionary mapping unigrams in truthful reviews to their
+        respecitve probabilities
 
     Returns:
         A list of features generated from the text
     """
-    review_filtered = remove_stopwords(text)
+    text_filtered = remove_stopwords(text)
     features = []
-    features.append(get_sentiment_pos(review_filtered))
-    features.extend(get_empath_scores(review_filtered))
-    features.append(get_sentiment_neg(review_filtered))
+    features.append(get_sentiment_pos(text_filtered))
+    features.extend(get_empath_scores(text_filtered))
+    features.append(get_sentiment_neg(text_filtered))
     features.append(get_readabilty(text))
-    features.extend(get_parts_of_speech(review_filtered))
+    features.extend(get_parts_of_speech(text_filtered))
     features.append(get_uppercase_char_count(text))
     features.append(get_exclamation_count(text))
-    features.append(get_len(review_filtered))
+    features.append(get_len(text_filtered))
     features.extend(
-        get_word_count_lst(review_filtered, unigram_prob_dict_tru, unigram_prob_dict_dec)
+        get_word_count_lst(
+            text_filtered, unigram_prob_dict_truthful, unigram_prob_dict_deceptive
+        )
     )
     floored_features = [0 if feature < 0 else feature for feature in features]
     return floored_features
