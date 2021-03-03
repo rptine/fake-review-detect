@@ -13,9 +13,9 @@ import pickle
 import yaml
 
 
-class OpinionSpamModel:
+class OpSpamModelBuilder:
     """
-    Opinion Spam Model
+    Opinion Spam Model Builder
 
     Encapsulation of training and evaluating three types (unigram, bigram and Naive Bayes) of
     opinion spam models. Opinion spam models predict whether text reviews are truthful or
@@ -35,7 +35,7 @@ class OpinionSpamModel:
         validation_data_path=None,
     ):
         """
-        Initializes OpinionSpamModel with a model type, training_data_path and validation_data_path.
+        Initializes OpSpamModelBuilder with a model type, training_data_path and validation_data_path.
 
         Args:
             filename: path to .txt file containing a labeled list of reviews, where each review is
@@ -217,12 +217,12 @@ class OpinionSpamModel:
             training_data_path: Path to .txt file containing training data
 
         Returns
-            OpinionSpamModel object with the attribute trained_model containing a reference to
+            OpSpamModelBuilder object with the attribute trained_model containing a reference to
             to a model trained on the data obtained from the training_data_path.
         """
         if training_data_path is None:
             training_data_path = self.training_data_path
-        labeled_train_token_lists = OpinionSpamModel.get_passages_from_labeled_txt(
+        labeled_train_token_lists = OpSpamModelBuilder.get_passages_from_labeled_txt(
             training_data_path
         )
         # split training word lists into truthful and deceptive sets
@@ -233,22 +233,22 @@ class OpinionSpamModel:
                 truthful_train_token_lists.append(token_list)
             else:
                 deceptive_train_token_lists.append(token_list)
-        unigram_count_dict_truthful = OpinionSpamModel.build_unigram_count_dict(
+        unigram_count_dict_truthful = OpSpamModelBuilder.build_unigram_count_dict(
             truthful_train_token_lists
         )
-        unigram_count_dict_deceptive = OpinionSpamModel.build_unigram_count_dict(
+        unigram_count_dict_deceptive = OpSpamModelBuilder.build_unigram_count_dict(
             deceptive_train_token_lists
         )
-        num_tokens_truthful = OpinionSpamModel.count_num_of_tokens(
+        num_tokens_truthful = OpSpamModelBuilder.count_num_of_tokens(
             truthful_train_token_lists
         )
-        num_tokens_deceptive = OpinionSpamModel.count_num_of_tokens(
+        num_tokens_deceptive = OpSpamModelBuilder.count_num_of_tokens(
             deceptive_train_token_lists
         )
-        unigram_prob_dict_truthful = OpinionSpamModel.get_unigram_prob_dict(
+        unigram_prob_dict_truthful = OpSpamModelBuilder.get_unigram_prob_dict(
             unigram_count_dict_truthful, truthful_train_token_lists, num_tokens_truthful
         )
-        unigram_prob_dict_deceptive = OpinionSpamModel.get_unigram_prob_dict(
+        unigram_prob_dict_deceptive = OpSpamModelBuilder.get_unigram_prob_dict(
             unigram_count_dict_deceptive,
             deceptive_train_token_lists,
             num_tokens_deceptive,
@@ -262,18 +262,18 @@ class OpinionSpamModel:
         if (
             self.model_type == "bigram"
         ):  # add bigram dictionaries to model if model type is bigram
-            bigram_count_dict_truthful = OpinionSpamModel.build_bigram_count_dict(
+            bigram_count_dict_truthful = OpSpamModelBuilder.build_bigram_count_dict(
                 truthful_train_token_lists, unigram_count_dict_truthful
             )
-            bigram_count_dict_deceptive = OpinionSpamModel.build_bigram_count_dict(
+            bigram_count_dict_deceptive = OpSpamModelBuilder.build_bigram_count_dict(
                 deceptive_train_token_lists, unigram_count_dict_deceptive
             )
-            bigram_prob_dict_truthful = OpinionSpamModel.get_bigram_prob_dict(
+            bigram_prob_dict_truthful = OpSpamModelBuilder.get_bigram_prob_dict(
                 bigram_count_dict_truthful,
                 unigram_count_dict_truthful,
                 unigram_prob_dict_truthful,
             )
-            bigram_prob_dict_deceptive = OpinionSpamModel.get_bigram_prob_dict(
+            bigram_prob_dict_deceptive = OpSpamModelBuilder.get_bigram_prob_dict(
                 bigram_count_dict_deceptive,
                 unigram_count_dict_deceptive,
                 unigram_prob_dict_deceptive,
@@ -281,20 +281,48 @@ class OpinionSpamModel:
             model["bigram_truthful"] = bigram_prob_dict_truthful
             model["bigram_deceptive"] = bigram_prob_dict_deceptive
         elif self.model_type in ["NB", "Naive Bayes"]:
-            training_feats_deceptive = OpinionSpamModel.get_features_all_reviews(
-                deceptive_train_token_lists,
-                unigram_prob_dict_truthful,
-                unigram_prob_dict_deceptive,
-            )
-            training_feats_truthful = OpinionSpamModel.get_features_all_reviews(
-                truthful_train_token_lists,
-                unigram_prob_dict_truthful,
-                unigram_prob_dict_deceptive,
-            )
+            training_feat_lst_truthful = [
+                OpSpamModelBuilder.get_features(
+                    truthful_train_token_lists[0],
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+            ]
+            for token_list in tqdm(truthful_train_token_lists[1:]):
+                training_feat_truthful = OpSpamModelBuilder.get_features(
+                    token_list,
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+                training_feat_lst_truthful = np.vstack(
+                    [training_feat_lst_truthful, training_feat_truthful]
+                )
+                training_feat_lst_truthful = preprocessing.normalize(
+                    training_feat_lst_truthful, axis=0, norm="max"
+                )
+            training_feat_lst_deceptive = [
+                OpSpamModelBuilder.get_features(
+                    deceptive_train_token_lists[0],
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+            ]
+            for token_list in tqdm(deceptive_train_token_lists[1:]):
+                training_feat_deceptive = OpSpamModelBuilder.get_features(
+                    token_list,
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+                training_feat_lst_deceptive = np.vstack(
+                    [training_feat_lst_deceptive, training_feat_deceptive]
+                )
+                training_feat_lst_deceptive = preprocessing.normalize(
+                    training_feat_lst_deceptive, axis=0, norm="max"
+                )
             labels_truthful = np.zeros(len(truthful_train_token_lists))
             labels_deceptive = np.ones(len(deceptive_train_token_lists))
             all_feats_train = np.vstack(
-                (training_feats_deceptive, training_feats_truthful)
+                (training_feat_lst_deceptive, training_feat_lst_truthful)
             )
             all_labels_train = np.concatenate((labels_deceptive, labels_truthful))
             model = naive_bayes.MultinomialNB()
@@ -323,7 +351,19 @@ class OpinionSpamModel:
         return list_of_token_lists
 
     @staticmethod
-    def compute_perplex(model_type, token_list, probability_dict, num_tokens):
+    def compute_perplex(model_type, token_list, probability_dict):
+        """
+        Computes the perplexity score for the token_list
+
+        Args:
+            model_type: a string indiciating the model type, either "unigram" or "bigram"
+            token_list: a list of tokens to compute the probability score of
+            probability_dict: a unigram or bigram probability dictionary, mapping unigrams
+            or bigrams to respective probabilities.
+
+        Returns:
+            The perplexity score for the token_list.
+        """
         sum_probs = 0
         if model_type == "unigram":
             for word in token_list:
@@ -331,8 +371,8 @@ class OpinionSpamModel:
                 if prob is None:
                     prob = probability_dict.get("<unk>")
                 sum_probs -= math.log(prob)
-            result_for_line = math.exp(sum_probs / num_tokens)
-            return result_for_line
+            result_for_token_list = math.exp(sum_probs / len(token_list))
+            return result_for_token_list
         elif model_type == "bigram":
             for i in range(len(token_list) - 1):
                 prob = 0
@@ -341,8 +381,8 @@ class OpinionSpamModel:
                 if prob is None:
                     prob = probability_dict.get("<unk> <unk>")
                 sum_probs -= math.log(prob)
-            result_for_line = math.exp(sum_probs / num_tokens)
-            return result_for_line
+            result_for_token_list = math.exp(sum_probs / len(token_list))
+            return result_for_token_list
 
     @staticmethod
     def eval_preditions(prediction_list, list_actuals):
@@ -421,39 +461,39 @@ class OpinionSpamModel:
         return average_accuracy
 
     @staticmethod
-    def get_features_all_reviews(
-        list_of_token_lists, unigram_prob_dict_tru, unigram_prob_dict_dec
-    ):
+    def get_features(token_list, unigram_prob_dict_tru, unigram_prob_dict_dec):
         """
         Produces a list of features to be used for training an sklearn model.
 
         Args:
-            list_of_token_lists: a list of token lists
+            token_list: a list of tokens to produce features for
             unigram_prob_dict_tru: dictionary mapping unigrams found in truthful reviews to their
             respective probabilities
             unigram_prob_dict_dec: dictionary mapping unigrams found in deceptive reviews to their
             respective probabilities
 
         Returns:
-            A list of features to be used for training an sklearn model
+            A list of features sourced from the token_list, to be used for training an sklearn model
         """
         all_features_numpy = np.asarray([])
-        for rev in tqdm(list_of_token_lists):
-            rev = " ".join(rev)
-            feat_list = feat_extract.get_feature_vector(
-                rev, unigram_prob_dict_tru, unigram_prob_dict_dec
-            )
-            feat_list_numpy = np.asarray(feat_list)
-            if all_features_numpy.size == 0:
-                all_features_numpy = feat_list_numpy
-            else:
-                all_features_numpy = np.vstack([all_features_numpy, feat_list_numpy])
-        all_features_numpy = preprocessing.normalize(
-            all_features_numpy, axis=0, norm="max"
+        token_list = " ".join(token_list)
+        feat_list = feat_extract.get_feature_vector(
+            token_list, unigram_prob_dict_tru, unigram_prob_dict_dec
         )
-        return all_features_numpy
+        feat_list_numpy = np.asarray(feat_list)
+        return feat_list_numpy
 
     def predict(self, text):
+        """
+        Encapsulation of logic for obtaining a single prediction for three types (unigram, bigram and
+        Naive Bayes) of opinion spam models on a single prediction.
+
+        Args:
+            validation_data_path: Path to .txt file containing validation reviews
+
+        Returns
+            A prediction report containing the model's accuracy on the validation reviews
+        """
         if self.model_type in ["unigram", "bigram"]:
             perplex_truthful_tprobs = self.compute_perplex(
                 text,
@@ -473,22 +513,23 @@ class OpinionSpamModel:
             )
             prediction = 0
         elif self.model_type in ["NB", "Naive Bayes"]:
-            valid_feats_truthful = OpinionSpamModel.get_features_all_reviews(
+            valid_feats_truthful = OpSpamModelBuilder.get_features(
                 text,
                 unigram_prob_dict_truthful,
                 unigram_prob_dict_deceptive,
             )
-            valid_feats_deceptive = OpinionSpamModel.get_features_all_reviews(
+            valid_feats_deceptive = OpSpamModelBuilder.get_features(
                 text,
                 unigram_prob_dict_truthful,
                 unigram_prob_dict_deceptive,
             )
             prediction = self.trained_model.predict(text)
+        return prediction
 
     def predict_on_list(self, validation_data_path=None):
         """
-        Encapsulation of logic for obtaining predictions for three types (unigram, bigram and
-        Naive Bayes) of opinion spam models on a list of reviews.
+        Encapsulation of logic for obtaining accuracy values for three types (unigram, bigram and
+        Naive Bayes) of opinion spam models on predicting on a list of reviews.
 
         Args:
             validation_data_path: Path to .txt file containing validation reviews
@@ -504,8 +545,8 @@ class OpinionSpamModel:
             list(unigram_prob_dict_truthful.keys())
             + list(unigram_prob_dict_deceptive.keys())
         )
-        labeled_validation_token_lists = OpinionSpamModel.get_passages_from_labeled_txt(
-            validation_data_path
+        labeled_validation_token_lists = (
+            OpSpamModelBuilder.get_passages_from_labeled_txt(validation_data_path)
         )
         truthful_validation_token_lists = []
         deceptive_validation_token_lists = []
@@ -514,69 +555,59 @@ class OpinionSpamModel:
                 truthful_validation_token_lists.append(token_list)
             else:
                 deceptive_validation_token_lists.append(token_list)
-        truthful_transformed_validation_token_lists = OpinionSpamModel.insert_unks(
+        truthful_transformed_validation_token_lists = OpSpamModelBuilder.insert_unks(
             truthful_validation_token_lists, unigram_prob_dict_truthful.keys()
         )
-        deceptive_transformed_validation_token_lists = OpinionSpamModel.insert_unks(
+        deceptive_transformed_validation_token_lists = OpSpamModelBuilder.insert_unks(
             deceptive_validation_token_lists, unigram_prob_dict_deceptive.keys()
-        )
-        num_tokens_truthful = OpinionSpamModel.count_num_of_tokens(
-            truthful_transformed_validation_token_lists
-        )
-        num_tokens_deceptive = OpinionSpamModel.count_num_of_tokens(
-            deceptive_transformed_validation_token_lists
         )
         prediction_report = dict(keys={})
         if self.model_type in ["unigram", "bigram"]:
             perplex_truthful_tprobs = [
-                OpinionSpamModel.compute_perplex(
+                OpSpamModelBuilder.compute_perplex(
                     self.model_type,
                     token_list,
                     self.trained_model[self.model_type + "_truthful"],
-                    num_tokens_truthful,
                 )
                 for token_list in truthful_transformed_validation_token_lists
             ]
             perplex_truthful_dprobs = [
-                OpinionSpamModel.compute_perplex(
+                OpSpamModelBuilder.compute_perplex(
                     self.model_type,
                     token_list,
                     self.trained_model[self.model_type + "_deceptive"],
-                    num_tokens_truthful,
                 )
                 for token_list in truthful_transformed_validation_token_lists
             ]
             perplex_deceptive_tprobs = [
-                OpinionSpamModel.compute_perplex(
+                OpSpamModelBuilder.compute_perplex(
                     self.model_type,
                     token_list,
                     self.trained_model[self.model_type + "_truthful"],
-                    num_tokens_deceptive,
                 )
                 for token_list in deceptive_transformed_validation_token_lists
             ]
             perplex_deceptive_dprobs = [
-                OpinionSpamModel.compute_perplex(
+                OpSpamModelBuilder.compute_perplex(
                     self.model_type,
                     token_list,
                     self.trained_model[self.model_type + "_deceptive"],
-                    num_tokens_deceptive,
                 )
                 for token_list in deceptive_transformed_validation_token_lists
             ]
-            predictions_truthful = OpinionSpamModel.make_predictions(
+            predictions_truthful = OpSpamModelBuilder.make_predictions(
                 perplex_truthful_dprobs, perplex_truthful_tprobs
             )
-            predictions_deceptive = OpinionSpamModel.make_predictions(
+            predictions_deceptive = OpSpamModelBuilder.make_predictions(
                 perplex_deceptive_dprobs, perplex_deceptive_tprobs
             )
-            accuracy_truthful = OpinionSpamModel.eval_preditions(
+            accuracy_truthful = OpSpamModelBuilder.eval_preditions(
                 predictions_truthful, "truthful"
             )
-            accuracy_deceptive = OpinionSpamModel.eval_preditions(
+            accuracy_deceptive = OpSpamModelBuilder.eval_preditions(
                 predictions_deceptive, "deceptive"
             )
-            average_accuracy = OpinionSpamModel.calculate_average_accuracy(
+            average_accuracy = OpSpamModelBuilder.calculate_average_accuracy(
                 accuracy_truthful,
                 len(predictions_truthful),
                 accuracy_deceptive,
@@ -588,25 +619,59 @@ class OpinionSpamModel:
                 "accuracy_deceptive": "{0:.2%}".format(accuracy_deceptive),
             }
         elif self.model_type in ["NB", "Naive Bayes"]:
-            valid_feats_truthful = OpinionSpamModel.get_features_all_reviews(
-                truthful_validation_token_lists,
-                unigram_prob_dict_truthful,
-                unigram_prob_dict_deceptive,
+            # Features from truthful texts
+            valid_feats_lst_truthful = [
+                OpSpamModelBuilder.get_features(
+                    truthful_validation_token_lists[0],
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+            ]
+            for token_list in tqdm(truthful_validation_token_lists[1:]):
+                valid_feat_truthful = OpSpamModelBuilder.get_features(
+                    token_list,
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+                valid_feats_lst_truthful = np.vstack(
+                    [valid_feats_lst_truthful, valid_feat_truthful]
+                )
+            valid_feats_lst_truthful = preprocessing.normalize(
+                valid_feats_lst_truthful, axis=0, norm="max"
             )
-            valid_feats_deceptive = OpinionSpamModel.get_features_all_reviews(
-                deceptive_validation_token_lists,
-                unigram_prob_dict_truthful,
-                unigram_prob_dict_deceptive,
+            # Features from deceptive texts
+            valid_feats_lst_deceptive = [
+                OpSpamModelBuilder.get_features(
+                    deceptive_validation_token_lists[0],
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+            ]
+            for token_list in tqdm(deceptive_validation_token_lists[1:]):
+                valid_feat_deceptive = OpSpamModelBuilder.get_features(
+                    token_list,
+                    unigram_prob_dict_truthful,
+                    unigram_prob_dict_deceptive,
+                )
+                valid_feats_lst_deceptive = np.vstack(
+                    [valid_feats_lst_deceptive, valid_feat_deceptive]
+                )
+                valid_feats_lst_deceptive = preprocessing.normalize(
+                    valid_feats_lst_deceptive, axis=0, norm="max"
+                )
+            NB_predictions_truthful = self.trained_model.predict(
+                valid_feats_lst_truthful
             )
-            NB_predictions_truthful = self.trained_model.predict(valid_feats_truthful)
-            NB_predictions_deceptive = self.trained_model.predict(valid_feats_deceptive)
-            NB_accuracy_truthful = OpinionSpamModel.eval_preditions(
+            NB_predictions_deceptive = self.trained_model.predict(
+                valid_feats_lst_deceptive
+            )
+            NB_accuracy_truthful = OpSpamModelBuilder.eval_preditions(
                 NB_predictions_truthful, "truthful"
             )
-            NB_accuracy_deceptive = OpinionSpamModel.eval_preditions(
+            NB_accuracy_deceptive = OpSpamModelBuilder.eval_preditions(
                 NB_predictions_deceptive, "deceptive"
             )
-            NB_accuracy = OpinionSpamModel.calculate_average_accuracy(
+            NB_accuracy = OpSpamModelBuilder.calculate_average_accuracy(
                 NB_accuracy_truthful,
                 len(NB_predictions_truthful),
                 NB_accuracy_deceptive,
@@ -624,7 +689,7 @@ if __name__ == "__main__":
     with open(r"config.yml") as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     for model in config.keys():
-        OpSpamModel = OpinionSpamModel(config[model])
+        OpSpamModel = OpSpamModelBuilder(config[model])
         OpSpamModel.train()
         prediction_report = OpSpamModel.predict_on_list()
         print(f"{model}'s accuracy report: {prediction_report}")
